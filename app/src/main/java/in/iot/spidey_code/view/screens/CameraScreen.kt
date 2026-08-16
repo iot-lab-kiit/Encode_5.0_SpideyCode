@@ -19,20 +19,11 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -45,7 +36,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -56,6 +46,7 @@ import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import `in`.iot.spidey_code.data.model.FilterType
 import `in`.iot.spidey_code.data.model.displayName
+import `in`.iot.spidey_code.view.components.CameraPermissionNotice
 import `in`.iot.spidey_code.view.components.CameraShutterButton
 import `in`.iot.spidey_code.view.components.CameraTopBar
 import `in`.iot.spidey_code.view.components.FaceOverlayCanvas
@@ -220,7 +211,7 @@ fun CameraScreen(
                 modifier = Modifier.align(Alignment.TopCenter)
             )
 
-            // 4. Bottom Controls: White Camera Shutter Button with Centered Lottie Web Overlay
+            // 4. Bottom Controls: White Camera Shutter Button with Centered Lottie Web Overlay Component
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -232,7 +223,6 @@ fun CameraScreen(
                 Box(
                     contentAlignment = Alignment.Center
                 ) {
-                    // Classic White Circular Camera Shutter Button (Underneath)
                     CameraShutterButton(
                         isCapturing = isCapturing,
                         onClick = {
@@ -298,48 +288,16 @@ fun CameraScreen(
                         }
                     )
 
-                    // Transparent Lottie Spider-Web Overlay (Drawn ON TOP of white shutter button)
                     SpideyNetAnimation(
                         modifier = Modifier.size(110.dp)
                     )
                 }
             }
         } else {
-            // Permission Denied View
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Spacer(modifier = Modifier.weight(1f))
-                Icon(
-                    imageVector = Icons.Default.CameraAlt,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(64.dp)
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Camera Permission Required",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Please grant camera permission to use real-time face filter features.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(24.dp))
-                OutlinedButton(
-                    onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }
-                ) {
-                    Text("Grant Camera Permission")
-                }
-                Spacer(modifier = Modifier.weight(1f))
-            }
+            // Permission Denied View Component
+            CameraPermissionNotice(
+                onRequestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) }
+            )
         }
     }
 }

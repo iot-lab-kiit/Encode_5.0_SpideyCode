@@ -13,8 +13,10 @@ import `in`.iot.spidey_code.data.model.FilterType
 import `in`.iot.spidey_code.view.screens.CameraScreen
 import `in`.iot.spidey_code.view.screens.GearSelectionScreen
 import `in`.iot.spidey_code.view.screens.ReviewScreen
+import `in`.iot.spidey_code.view.screens.SplashScreen
 
 object Routes {
+    const val SPLASH = "splash"
     const val GEAR_SELECTION = "gear_selection"
     const val CAMERA = "camera/{filterType}"
     const val REVIEW = "review/{filterType}?imageUri={imageUri}"
@@ -31,9 +33,19 @@ fun AppNavigation(
 ) {
     NavHost(
         navController = navController,
-        startDestination = Routes.GEAR_SELECTION,
+        startDestination = Routes.SPLASH,
         modifier = modifier
     ) {
+        composable(route = Routes.SPLASH) {
+            SplashScreen(
+                onSplashFinished = {
+                    navController.navigate(Routes.GEAR_SELECTION) {
+                        popUpTo(Routes.SPLASH) { inclusive = true }
+                    }
+                }
+            )
+        }
+
         composable(route = Routes.GEAR_SELECTION) {
             GearSelectionScreen(
                 onNavigateToCamera = { selectedFilter ->

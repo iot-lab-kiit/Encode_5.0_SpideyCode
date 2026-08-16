@@ -9,19 +9,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import `in`.iot.spidey_code.data.model.FilterType
 import `in`.iot.spidey_code.view.components.ContinueButton
 import `in`.iot.spidey_code.view.components.FilterCard
+import `in`.iot.spidey_code.view.components.GearSelectionHeader
 import `in`.iot.spidey_code.vm.GearSelectionViewModel
 
 @Composable
@@ -39,17 +37,7 @@ fun GearSelectionScreen(
                 .padding(innerPadding)
                 .padding(20.dp)
         ) {
-            Text(
-                text = "Pick Your Gear",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "Select an active suit filter before starting the camera preview.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp, bottom = 20.dp)
-            )
+            GearSelectionHeader()
 
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
