@@ -1,0 +1,26 @@
+# Gradle & Build output
+.gradle/
+build/
+/build
+/app/build
+local.properties
+.externalNativeBuild/
+.cxx/
+captures/
+
+# IDE / Android Studio files
+.idea/
+*.iml
+.DS_Store
+
+# Test directories and files
+/app/src/test/
+/app/src/androidTest/
+**/src/test/
+**/src/androidTest/
+*Test.kt
+*Test.java
+
+# Ignore XML files except AndroidManifest.xml
+*.xml
+!**/AndroidManifest.xml
