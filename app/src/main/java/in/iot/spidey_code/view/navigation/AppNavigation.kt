@@ -1,5 +1,6 @@
 package `in`.iot.spidey_code.view.navigation
 
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
@@ -16,10 +17,11 @@ import `in`.iot.spidey_code.view.screens.ReviewScreen
 object Routes {
     const val GEAR_SELECTION = "gear_selection"
     const val CAMERA = "camera/{filterType}"
-    const val REVIEW = "review/{filterType}"
+    const val REVIEW = "review/{filterType}?imageUri={imageUri}"
 
     fun createCameraRoute(filterType: FilterType): String = "camera/${filterType.name}"
-    fun createReviewRoute(filterType: FilterType): String = "review/${filterType.name}"
+    fun createReviewRoute(filterType: FilterType, imageUri: String): String =
+        "review/${filterType.name}?imageUri=${Uri.encode(imageUri)}"
 }
 
 @Composable
@@ -56,8 +58,8 @@ fun AppNavigation(
 
             CameraScreen(
                 selectedFilter = filterType,
-                onNavigateToReview = { selected ->
-                    navController.navigate(Routes.createReviewRoute(selected))
+                onNavigateToReview = { selectedFilter, imageUri ->
+                    navController.navigate(Routes.createReviewRoute(selectedFilter, imageUri))
                 },
                 onNavigateBack = {
                     navController.popBackStack()
@@ -71,16 +73,23 @@ fun AppNavigation(
                 navArgument("filterType") {
                     type = NavType.StringType
                     defaultValue = FilterType.CLASSIC_MASK.name
+                },
+                navArgument("imageUri") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
                 }
             )
         ) { backStackEntry ->
             val filterName = backStackEntry.arguments?.getString("filterType")
+            val imageUri = backStackEntry.arguments?.getString("imageUri")
             val filterType = filterName?.let {
                 runCatching { FilterType.valueOf(it) }.getOrDefault(FilterType.CLASSIC_MASK)
             } ?: FilterType.CLASSIC_MASK
 
             ReviewScreen(
                 selectedFilter = filterType,
+                imageUri = imageUri,
                 onNavigateToGearSelection = {
                     navController.navigate(Routes.GEAR_SELECTION) {
                         popUpTo(Routes.GEAR_SELECTION) { inclusive = true }

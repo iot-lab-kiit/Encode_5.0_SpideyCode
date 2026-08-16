@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Matrix
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
@@ -16,10 +17,7 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -29,16 +27,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -52,7 +43,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -66,14 +56,19 @@ import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import `in`.iot.spidey_code.data.model.FilterType
 import `in`.iot.spidey_code.data.model.displayName
+import `in`.iot.spidey_code.view.components.CameraShutterButton
+import `in`.iot.spidey_code.view.components.CameraTopBar
 import `in`.iot.spidey_code.view.components.FaceOverlayCanvas
+import `in`.iot.spidey_code.view.components.SpideyNetAnimation
 import `in`.iot.spidey_code.vm.CameraViewModel
+import java.io.File
+import java.io.FileOutputStream
 import java.util.concurrent.Executors
 
 @Composable
 fun CameraScreen(
     selectedFilter: FilterType,
-    onNavigateToReview: (FilterType) -> Unit,
+    onNavigateToReview: (FilterType, String) -> Unit,
     onNavigateBack: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: CameraViewModel = viewModel()
@@ -206,19 +201,111 @@ fun CameraScreen(
             .background(Color.Black)
     ) {
         if (isPermissionGranted) {
-            // 1. Full-Screen Edge-to-Edge Camera Viewport (No Margins)
+            // 1. Full-Screen Edge-to-Edge Camera Viewport
             AndroidView(
                 factory = { previewView },
                 modifier = Modifier.fillMaxSize()
             )
 
-            // 2. Real-Time Face Detection Bounding Box Compose Overlay
+            // 2. Real-Time Face Detection Overlay Component
             FaceOverlayCanvas(
                 faces = detectedFaces,
                 modifier = Modifier.fillMaxSize()
             )
+
+            // 3. Top Controls: CameraTopBar Component
+            CameraTopBar(
+                filterName = selectedFilter.displayName(),
+                onBack = onNavigateBack,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+
+            // 4. Bottom Controls: White Camera Shutter Button with Centered Lottie Web Overlay
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = 20.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center
+                ) {
+                    // Classic White Circular Camera Shutter Button (Underneath)
+                    CameraShutterButton(
+                        isCapturing = isCapturing,
+                        onClick = {
+                            isCapturing = true
+                            val cameraExecutor = Executors.newSingleThreadExecutor()
+                            imageCapture.takePicture(
+                                cameraExecutor,
+                                object : ImageCapture.OnImageCapturedCallback() {
+                                    override fun onCaptureSuccess(imageProxy: ImageProxy) {
+                                        val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+                                        val rawBitmap = imageProxy.toBitmap()
+
+                                        val matrix = Matrix().apply {
+                                            postRotate(rotationDegrees.toFloat())
+                                            postScale(-1f, 1f)
+                                        }
+
+                                        val rotatedBitmap = Bitmap.createBitmap(
+                                            rawBitmap,
+                                            0,
+                                            0,
+                                            rawBitmap.width,
+                                            rawBitmap.height,
+                                            matrix,
+                                            true
+                                        )
+
+                                        imageProxy.close()
+
+                                        val photoFile = File(
+                                            context.cacheDir,
+                                            "captured_spidey_${System.currentTimeMillis()}.jpg"
+                                        )
+
+                                        try {
+                                            FileOutputStream(photoFile).use { out ->
+                                                rotatedBitmap.compress(Bitmap.CompressFormat.JPEG, 92, out)
+                                            }
+                                        } catch (e: Exception) {
+                                            e.printStackTrace()
+                                        }
+
+                                        cameraExecutor.shutdown()
+
+                                        ContextCompat.getMainExecutor(context).execute {
+                                            isCapturing = false
+                                            if (photoFile.exists() && photoFile.length() > 0) {
+                                                val fileUri = Uri.fromFile(photoFile).toString()
+                                                onNavigateToReview(selectedFilter, fileUri)
+                                            }
+                                        }
+                                    }
+
+                                    override fun onError(exception: ImageCaptureException) {
+                                        exception.printStackTrace()
+                                        cameraExecutor.shutdown()
+                                        ContextCompat.getMainExecutor(context).execute {
+                                            isCapturing = false
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    )
+
+                    // Transparent Lottie Spider-Web Overlay (Drawn ON TOP of white shutter button)
+                    SpideyNetAnimation(
+                        modifier = Modifier.size(110.dp)
+                    )
+                }
+            }
         } else {
-            // Permission Denied Screen
+            // Permission Denied View
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -252,123 +339,6 @@ fun CameraScreen(
                     Text("Grant Camera Permission")
                 }
                 Spacer(modifier = Modifier.weight(1f))
-            }
-        }
-
-        // 3. Top Bar Controls: Back Button & Dynamic Island Pill (Status Bar Inset)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.TopCenter)
-                .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-        ) {
-            IconButton(
-                onClick = onNavigateBack,
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .size(42.dp)
-                    .background(
-                        color = Color.Black.copy(alpha = 0.55f),
-                        shape = CircleShape
-                    )
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = Color.White
-                )
-            }
-
-            Card(
-                modifier = Modifier.align(Alignment.Center),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color.Black.copy(alpha = 0.75f)
-                ),
-                shape = RoundedCornerShape(24.dp)
-            ) {
-                Text(
-                    text = selectedFilter.displayName(),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
-                )
-            }
-        }
-
-        // 4. Bottom Camera Shutter Button (Navigation Bar Inset)
-        if (isPermissionGranted) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 24.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                // Round Camera Shutter Button
-                Box(
-                    modifier = Modifier
-                        .size(76.dp)
-                        .clip(CircleShape)
-                        .border(BorderStroke(4.dp, Color.White), CircleShape)
-                        .clickable(enabled = !isCapturing) {
-                            isCapturing = true
-                            val cameraExecutor = Executors.newSingleThreadExecutor()
-                            imageCapture.takePicture(
-                                cameraExecutor,
-                                object : ImageCapture.OnImageCapturedCallback() {
-                                    override fun onCaptureSuccess(imageProxy: ImageProxy) {
-                                        val rotationDegrees = imageProxy.imageInfo.rotationDegrees
-                                        val rawBitmap = imageProxy.toBitmap()
-
-                                        val matrix = Matrix().apply {
-                                            postRotate(rotationDegrees.toFloat())
-                                            // Mirror horizontally for front camera
-                                            postScale(-1f, 1f)
-                                        }
-
-                                        val rotatedBitmap = Bitmap.createBitmap(
-                                            rawBitmap,
-                                            0,
-                                            0,
-                                            rawBitmap.width,
-                                            rawBitmap.height,
-                                            matrix,
-                                            true
-                                        )
-
-                                        imageProxy.close()
-                                        cameraExecutor.shutdown()
-
-                                        ContextCompat.getMainExecutor(context).execute {
-                                            viewModel.onImageCaptured(rotatedBitmap)
-                                            isCapturing = false
-                                            onNavigateToReview(selectedFilter)
-                                        }
-                                    }
-
-                                    override fun onError(exception: ImageCaptureException) {
-                                        exception.printStackTrace()
-                                        cameraExecutor.shutdown()
-                                        ContextCompat.getMainExecutor(context).execute {
-                                            isCapturing = false
-                                        }
-                                    }
-                                }
-                            )
-                        }
-                        .padding(6.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape)
-                            .background(if (isCapturing) Color.LightGray else Color.White)
-                    )
-                }
             }
         }
     }

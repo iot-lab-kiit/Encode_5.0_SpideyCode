@@ -33,6 +33,11 @@ android {
     buildFeatures {
         compose = true
     }
+    sourceSets {
+        getByName("main") {
+            assets.directories.add("assets")
+        }
+    }
 }
 
 dependencies {
@@ -47,6 +52,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)
+
+    // Lottie Compose
+    implementation(libs.lottie.compose)
 
     // CameraX
     implementation(libs.androidx.camera.core)

@@ -5,12 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -22,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import `in`.iot.spidey_code.data.model.FilterType
+import `in`.iot.spidey_code.view.components.ContinueButton
 import `in`.iot.spidey_code.view.components.FilterCard
 import `in`.iot.spidey_code.vm.GearSelectionViewModel
 
@@ -52,7 +51,6 @@ fun GearSelectionScreen(
                 modifier = Modifier.padding(top = 4.dp, bottom = 20.dp)
             )
 
-            // 2x2 Filter Card Grid Layout
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -100,18 +98,10 @@ fun GearSelectionScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Button(
-                onClick = { onNavigateToCamera(selectedFilter) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-            ) {
-                Text(
-                    text = "CONTINUE TO CAMERA",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            ContinueButton(
+                text = "CONTINUE TO CAMERA",
+                onClick = { onNavigateToCamera(selectedFilter) }
+            )
         }
     }
 }
