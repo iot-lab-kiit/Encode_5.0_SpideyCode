@@ -20,6 +20,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import `in`.iot.spidey_code.data.model.FilterType
 import `in`.iot.spidey_code.data.model.displayName
+import `in`.iot.spidey_code.utils.saveImageToGallery
+import `in`.iot.spidey_code.utils.shareImage
 import `in`.iot.spidey_code.view.components.CapturedImagePreviewCard
 import `in`.iot.spidey_code.view.components.ReviewActionRow
 import `in`.iot.spidey_code.view.components.ReviewTopBar
@@ -95,8 +97,12 @@ fun ReviewScreen(
 
             // 3. Single Horizontal Action Row Component
             ReviewActionRow(
-                onDownload = { /* MediaStore save placeholder */ },
-                onShare = { /* Share sheet placeholder */ },
+                onDownload = {
+                    saveImageToGallery(context, imageUri)
+                },
+                onShare = {
+                    shareImage(context, imageUri)
+                },
                 onRetake = handleReturnHome
             )
         }
