@@ -49,7 +49,7 @@ fun GearSelectionScreen(
                 item {
                     FilterCard(
                         filterType = FilterType.CLASSIC_MASK,
-                        title = "Classic Mask",
+                        title = "Classic Mask trial",
                         description = "Iconic red & webbed hero mask overlay.",
                         isSelected = selectedFilter == FilterType.CLASSIC_MASK,
                         onSelect = { viewModel.selectFilter(FilterType.CLASSIC_MASK) }
@@ -76,7 +76,7 @@ fun GearSelectionScreen(
                 item {
                     FilterCard(
                         filterType = FilterType.NONE,
-                        title = "No Mask",
+                        title = "No Mask ",
                         description = "Clean view without active overlay.",
                         isSelected = selectedFilter == FilterType.NONE,
                         onSelect = { viewModel.selectFilter(FilterType.NONE) }
