@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Base application startup splash theme -->
+    <style name="Theme.SpideyCode" parent="Theme.SplashScreen">
+        <!-- System splash background color matching app dark theme (#09090B) -->
+        <item name="windowSplashScreenBackground">@color/app_dark_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.SpideyCode.Main</item>
+    </style>
+
+    <!-- Main application theme after splash transition -->
+    <style name="Theme.SpideyCode.Main" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/app_dark_background</item>
+        <item name="android:statusBarColor">@color/app_dark_background</item>
+        <item name="android:navigationBarColor">@color/app_dark_background</item>
+    </style>
+
+</resources>

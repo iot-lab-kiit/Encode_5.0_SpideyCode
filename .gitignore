@@ -22,5 +22,4 @@ captures/
 *Test.java
 
 # Ignore XML files except AndroidManifest.xml
-*.xml
 !**/AndroidManifest.xml
