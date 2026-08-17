@@ -76,7 +76,7 @@ fun GearSelectionScreen(
                 item {
                     FilterCard(
                         filterType = FilterType.NONE,
-                        title = "No Mask",
+                        title = "No Mask ",
                         description = "Clean view without active overlay.",
                         isSelected = selectedFilter == FilterType.NONE,
                         onSelect = { viewModel.selectFilter(FilterType.NONE) }
