@@ -173,6 +173,10 @@ fun CameraScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { /* Video still works without audio if this is denied -- just recorded muted. */ }
 
+    val storagePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { /* Pre-API 29 only; see the WRITE_EXTERNAL_STORAGE check below. */ }
+
     LaunchedEffect(Unit) {
         val checkPermission = ContextCompat.checkSelfPermission(
             context,
@@ -186,6 +190,14 @@ fun CameraScreen(
         }
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+        // Scoped storage (and the MediaStore-without-permission exemption for an app's own
+        // files) only exists from API 29 onward -- below that, inserting into MediaStore.Video
+        // needs this runtime permission or the insert silently fails.
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+        ) {
+            storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
     }
 
@@ -201,9 +213,22 @@ fun CameraScreen(
     fun startRecording() {
         if (activeRecording != null) return
 
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+        ) {
+            Toast.makeText(context, "Storage permission needed to save video", Toast.LENGTH_SHORT).show()
+            storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            return
+        }
+
         val name = "spidey_video_${System.currentTimeMillis()}"
         val contentValues = ContentValues().apply {
-            put(MediaStore.Video.Media.DISPLAY_NAME, name)
+            // MediaStore needs either a file extension on the display name or an explicit
+            // MIME type to know what kind of file to create -- without either, some
+            // ContentResolver implementations silently fail the insert (returns null),
+            // which CameraX then reports as "Unable to create MediaStore file."
+            put(MediaStore.Video.Media.DISPLAY_NAME, "$name.mp4")
+            put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
             put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/SpideyCode")
         }
         val outputOptions = MediaStoreOutputOptions.Builder(
