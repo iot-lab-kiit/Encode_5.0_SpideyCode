@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceLandmark
+import `in`.iot.spidey_code.data.model.FilterType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,6 +36,24 @@ class CameraViewModel : ViewModel() {
 
     private val _isMaskEnabled = MutableStateFlow(false)
     val isMaskEnabled: StateFlow<Boolean> = _isMaskEnabled.asStateFlow()
+
+    // Live-selected filter/frame, switchable in-camera via the Snapchat-style filter
+    // carousel without leaving the screen. Seeded once from the Gear Selection nav
+    // argument (see initializeFilter), then owned entirely by this ViewModel.
+    private val _selectedFilter = MutableStateFlow(FilterType.CLASSIC_MASK)
+    val selectedFilter: StateFlow<FilterType> = _selectedFilter.asStateFlow()
+    private var filterInitialized = false
+
+    fun initializeFilter(filter: FilterType) {
+        if (!filterInitialized) {
+            _selectedFilter.value = filter
+            filterInitialized = true
+        }
+    }
+
+    fun selectFilter(filter: FilterType) {
+        _selectedFilter.value = filter
+    }
 
     fun updatePermissionStatus(isGranted: Boolean) {
         _isPermissionGranted.value = isGranted
@@ -181,6 +200,3 @@ class CameraViewModel : ViewModel() {
         _detectedFaces.value = transformedList
     }
 }
-
-
-

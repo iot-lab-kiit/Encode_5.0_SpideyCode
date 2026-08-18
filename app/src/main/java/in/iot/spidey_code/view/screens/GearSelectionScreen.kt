@@ -7,15 +7,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -32,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import `in`.iot.spidey_code.data.model.FilterType
+import `in`.iot.spidey_code.data.model.displayName
 import `in`.iot.spidey_code.ui.theme.SpiderSurface
 import `in`.iot.spidey_code.view.components.ContinueButton
 import `in`.iot.spidey_code.view.components.FilterCard
@@ -95,74 +98,36 @@ fun GearSelectionScreen(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Responsive 2x2 Grid using Row/Column weights to fill 100% available screen space
-            Column(
+            // Scrollable 2-column grid -- scales cleanly as more filters are added,
+            // unlike a hand-paired Row/Column layout (7 filters doesn't split evenly).
+            fun selectAndGo(filter: FilterType) {
+                viewModel.selectFilter(filter)
+                onNavigateToCamera(filter)
+            }
+
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Row 1: Classic & Web Shooter
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
+                items(FilterType.entries.toList(), key = { it.name }) { filter ->
                     FilterCard(
-                        filterType = FilterType.CLASSIC_MASK,
-                        title = "Classic",
-                        isSelected = selectedFilter == FilterType.CLASSIC_MASK,
-                        onSelect = {
-                            viewModel.selectFilter(FilterType.CLASSIC_MASK)
-                            onNavigateToCamera(FilterType.CLASSIC_MASK)
-                        },
+                        filterType = filter,
+                        title = filter.displayName(),
+                        isSelected = selectedFilter == filter,
+                        onSelect = { selectAndGo(filter) },
                         isClickable = true,
-                        previewBackgroundColor = `in`.iot.spidey_code.ui.theme.SpideyRed.copy(alpha = 0.25f),
+                        previewBackgroundColor = if (filter == FilterType.CLASSIC_MASK) {
+                            `in`.iot.spidey_code.ui.theme.SpideyRed.copy(alpha = 0.25f)
+                        } else {
+                            null
+                        },
                         modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                    )
-
-                    FilterCard(
-                        filterType = FilterType.WEB_SHOOTER,
-                        title = "Web Shooter",
-                        isSelected = false,
-                        onSelect = { },
-                        isClickable = false,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                    )
-                }
-
-                // Row 2: Spidey Sense & No Mask
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    FilterCard(
-                        filterType = FilterType.SPIDEY_SENSE,
-                        title = "Spidey Sense",
-                        isSelected = false,
-                        onSelect = { },
-                        isClickable = false,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                    )
-
-                    FilterCard(
-                        filterType = FilterType.NONE,
-                        title = "No Mask",
-                        isSelected = false,
-                        onSelect = { },
-                        isClickable = false,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
+                            .fillMaxWidth()
+                            .aspectRatio(0.9f)
                     )
                 }
             }
