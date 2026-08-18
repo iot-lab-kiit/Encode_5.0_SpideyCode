@@ -17,13 +17,24 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cameraswitch
+import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.outlined.Face
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -46,6 +57,7 @@ import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import `in`.iot.spidey_code.data.model.FilterType
 import `in`.iot.spidey_code.data.model.displayName
+import `in`.iot.spidey_code.ui.theme.SpideyRed
 import `in`.iot.spidey_code.view.components.CameraPermissionNotice
 import `in`.iot.spidey_code.view.components.CameraShutterButton
 import `in`.iot.spidey_code.view.components.CameraTopBar
@@ -68,8 +80,11 @@ fun CameraScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val isPermissionGranted by viewModel.isPermissionGranted.collectAsState()
     val detectedFaces by viewModel.detectedFaces.collectAsState()
+    val isFrontCamera by viewModel.isFrontCamera.collectAsState()
+    val isMaskEnabled by viewModel.isMaskEnabled.collectAsState()
 
     var isCapturing by remember { mutableStateOf(false) }
+
 
     val previewView = remember {
         PreviewView(context).apply {
@@ -102,8 +117,8 @@ fun CameraScreen(
         }
     }
 
-    // CameraX + ML Kit Face Detection Lifecycle Binding
-    DisposableEffect(lifecycleOwner, isPermissionGranted) {
+    // CameraX + ML Kit Face Detection Lifecycle Binding (re-binds cleanly when camera facing changes)
+    DisposableEffect(lifecycleOwner, isPermissionGranted, isFrontCamera) {
         if (!isPermissionGranted) return@DisposableEffect onDispose {}
 
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
@@ -145,7 +160,7 @@ fun CameraScreen(
                                     rotationDegrees = rotationDegrees,
                                     previewWidth = previewView.width.toFloat(),
                                     previewHeight = previewView.height.toFloat(),
-                                    isFrontCamera = true
+                                    isFrontCamera = isFrontCamera
                                 )
                             }
                             .addOnFailureListener {
@@ -159,7 +174,11 @@ fun CameraScreen(
                     }
                 }
 
-                val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
+                val cameraSelector = if (isFrontCamera) {
+                    CameraSelector.DEFAULT_FRONT_CAMERA
+                } else {
+                    CameraSelector.DEFAULT_BACK_CAMERA
+                }
 
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(
@@ -201,6 +220,7 @@ fun CameraScreen(
             // 2. Real-Time Face Detection Overlay Component
             FaceOverlayCanvas(
                 faces = detectedFaces,
+                isMaskEnabled = isMaskEnabled,
                 modifier = Modifier.fillMaxSize()
             )
 
@@ -211,15 +231,40 @@ fun CameraScreen(
                 modifier = Modifier.align(Alignment.TopCenter)
             )
 
-            // 4. Bottom Controls: White Camera Shutter Button with Centered Lottie Web Overlay Component
-            Box(
+            // 4. Bottom Controls: [ Face Mask Toggle ] [ Camera Shutter Button ] [ Camera Switch ]
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(bottom = 20.dp),
-                contentAlignment = Alignment.Center
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 24.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                // Face Mask Toggle (LEFT)
+                IconButton(
+                    onClick = { viewModel.toggleMaskEnabled() },
+                    modifier = Modifier
+                        .size(52.dp)
+                        .background(
+                            color = if (isMaskEnabled) SpideyRed.copy(alpha = 0.85f) else Color.Black.copy(alpha = 0.55f),
+                            shape = CircleShape
+                        )
+                        .border(
+                            width = 2.dp,
+                            color = if (isMaskEnabled) Color.White else Color.White.copy(alpha = 0.3f),
+                            shape = CircleShape
+                        )
+                ) {
+                    Icon(
+                        imageVector = if (isMaskEnabled) Icons.Filled.Face else Icons.Outlined.Face,
+                        contentDescription = "Toggle Face Mask",
+                        tint = Color.White
+                    )
+                }
+
+                // Camera Shutter Button (CENTER - visually dominant)
                 Box(
                     contentAlignment = Alignment.Center
                 ) {
@@ -237,7 +282,9 @@ fun CameraScreen(
 
                                         val matrix = Matrix().apply {
                                             postRotate(rotationDegrees.toFloat())
-                                            postScale(-1f, 1f)
+                                            if (isFrontCamera) {
+                                                postScale(-1f, 1f)
+                                            }
                                         }
 
                                         val rotatedBitmap = Bitmap.createBitmap(
@@ -290,6 +337,28 @@ fun CameraScreen(
 
                     SpideyNetAnimation(
                         modifier = Modifier.size(110.dp)
+                    )
+                }
+
+                // Camera Switch Button (RIGHT)
+                IconButton(
+                    onClick = { viewModel.toggleCameraFacing() },
+                    modifier = Modifier
+                        .size(52.dp)
+                        .background(
+                            color = Color.Black.copy(alpha = 0.55f),
+                            shape = CircleShape
+                        )
+                        .border(
+                            width = 2.dp,
+                            color = Color.White.copy(alpha = 0.3f),
+                            shape = CircleShape
+                        )
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Cameraswitch,
+                        contentDescription = "Switch Camera",
+                        tint = Color.White
                     )
                 }
             }

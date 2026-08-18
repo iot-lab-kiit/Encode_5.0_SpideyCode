@@ -30,11 +30,29 @@ class CameraViewModel : ViewModel() {
     private val _capturedBitmap = MutableStateFlow<Bitmap?>(null)
     val capturedBitmap: StateFlow<Bitmap?> = _capturedBitmap.asStateFlow()
 
+    private val _isFrontCamera = MutableStateFlow(true)
+    val isFrontCamera: StateFlow<Boolean> = _isFrontCamera.asStateFlow()
+
+    private val _isMaskEnabled = MutableStateFlow(false)
+    val isMaskEnabled: StateFlow<Boolean> = _isMaskEnabled.asStateFlow()
+
     fun updatePermissionStatus(isGranted: Boolean) {
         _isPermissionGranted.value = isGranted
         if (!isGranted) {
             _detectedFaces.value = emptyList()
         }
+    }
+
+    fun toggleCameraFacing() {
+        _isFrontCamera.value = !_isFrontCamera.value
+    }
+
+    fun toggleMaskEnabled() {
+        _isMaskEnabled.value = !_isMaskEnabled.value
+    }
+
+    fun setMaskEnabled(enabled: Boolean) {
+        _isMaskEnabled.value = enabled
     }
 
     fun onImageCaptured(bitmap: Bitmap) {
@@ -135,16 +153,28 @@ class CameraViewModel : ViewModel() {
                 transformPoint(it.x, it.y, imageWidth, imageHeight, rotationDegrees, previewWidth, previewHeight, isFrontCamera)
             }
 
+            // Ensure finalLeftEye is always the point with smaller screen X (screen left)
+            // and finalRightEye is always the point with larger screen X (screen right)
+            val (finalLeftEye, finalRightEye) = if (screenLeftEye != null && screenRightEye != null) {
+                if (screenLeftEye.x <= screenRightEye.x) {
+                    screenLeftEye to screenRightEye
+                } else {
+                    screenRightEye to screenLeftEye
+                }
+            } else {
+                screenLeftEye to screenRightEye
+            }
+
             Log.d(
                 "FaceTransform",
                 "rotation=$rotationDegrees, img=${imageWidth}x${imageHeight}, prev=${previewWidth}x${previewHeight} | " +
-                        "rawL=$rawLeftEye, rawR=$rawRightEye | screenL=$screenLeftEye, screenR=$screenRightEye"
+                        "rawL=$rawLeftEye, rawR=$rawRightEye | finalL=$finalLeftEye, finalR=$finalRightEye"
             )
 
             TransformedFaceData(
                 boundingBox = boxRect,
-                leftEye = screenLeftEye,
-                rightEye = screenRightEye
+                leftEye = finalLeftEye,
+                rightEye = finalRightEye
             )
         }
 

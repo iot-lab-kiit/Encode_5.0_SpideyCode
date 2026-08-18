@@ -49,10 +49,11 @@ object SpideyMaskReference {
 @Composable
 fun FaceOverlayCanvas(
     faces: List<TransformedFaceData>,
+    isMaskEnabled: Boolean = true,
     modifier: Modifier = Modifier,
     boxColor: Color = Color(0xFF00FF66), // High-visibility neon green
     strokeWidthDp: Float = 3f,
-    showDebugBoundingBox: Boolean = true
+    showDebugBoundingBox: Boolean = false
 ) {
     val context = LocalContext.current
     val strokeWidthPx = Stroke(width = strokeWidthDp.dp.value).width
@@ -68,6 +69,8 @@ fun FaceOverlayCanvas(
             null
         }
     }
+
+    if (!isMaskEnabled) return
 
     Canvas(modifier = modifier.fillMaxSize()) {
         for (faceData in faces) {
@@ -96,13 +99,13 @@ fun FaceOverlayCanvas(
 
                 // Matrix Transformation Pipeline:
                 // 1. Move maskEyeCenter to local origin (0, 0)
-                // 2. Scale & vertically orient (scaleX, -scaleY) around (0, 0)
+                // 2. Scale & vertically orient (scaleX, scaleY) around (0, 0)
                 // 3. Rotate around (0, 0) according to eye-line tilt
                 // 4. Translate (0, 0) to detectedEyeCenter on screen
                 withTransform({
                     translate(left = detectedEyeCenter.x, top = detectedEyeCenter.y)
                     rotate(degrees = deltaAngleDeg, pivot = Offset.Zero)
-                    scale(scaleX = scaleFactor, scaleY = -scaleFactor, pivot = Offset.Zero)
+                    scale(scaleX = scaleFactor, scaleY = scaleFactor, pivot = Offset.Zero)
                 }) {
                     drawImage(
                         image = maskImageBitmap,
@@ -111,7 +114,7 @@ fun FaceOverlayCanvas(
                 }
             }
 
-            // 2. Debug Overlay: Face Bounding Box Outline (Debug only)
+            // 2. Debug Overlay: Face Bounding Box Outline (Disabled by default)
             if (showDebugBoundingBox) {
                 drawRect(
                     color = boxColor,
