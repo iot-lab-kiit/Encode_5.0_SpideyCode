@@ -41,19 +41,7 @@ object ImageCompositionUtils {
         previewWidth: Float,
         previewHeight: Float
     ): File? {
-        val frameDefinition = selectedFilter.frameDefinition
-
-        val rawFrameBitmap = selectedFilter.frameAssetPath?.let { assetPath ->
-            runCatching {
-                context.assets.open(assetPath).use { inputStream ->
-                    val options = BitmapFactory.Options().apply {
-                        inPreferredConfig = Bitmap.Config.ARGB_8888
-                        inPremultiplied = true
-                    }
-                    BitmapFactory.decodeStream(inputStream, null, options)
-                }
-            }.getOrNull()
-        }
+        val rawFrameBitmap = decodeFrameBitmap(context, selectedFilter)
 
         val maskBitmap = if (isMaskEnabled) {
             runCatching {
@@ -71,11 +59,7 @@ object ImageCompositionUtils {
             val frameW = rawFrameBitmap.width
             val frameH = rawFrameBitmap.height
 
-            val activeWindow = FrameWindowDetector.detectTransparentWindow(rawFrameBitmap)
-                ?: frameDefinition?.fallbackWindow
-                ?: NormalizedRect(0f, 0f, 1f, 1f)
-
-            val windowRect = activeWindow.toPixelRect(frameW, frameH)
+            val windowRect = resolveWindowRect(selectedFilter, rawFrameBitmap, frameW, frameH)
 
             val composite = Bitmap.createBitmap(frameW, frameH, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(composite)
@@ -184,6 +168,52 @@ object ImageCompositionUtils {
             e.printStackTrace()
             null
         }
+    }
+
+    /**
+     * Builds just the decorative layer of a filter -- frame art + branding overlay, with the
+     * photo window left fully transparent -- with no photo or mask drawn into it. Used to bake
+     * the same frame decoration onto a recorded *video* (see VideoCompositionUtils), where the
+     * "photo" is a whole video track rather than a single bitmap so it can't go through
+     * createComposedPoster directly. Returns the decoration bitmap plus the pixel rect (within
+     * that bitmap) where the video should be positioned to show through the window.
+     */
+    fun buildFrameDecorationOverlay(context: Context, selectedFilter: FilterType): Pair<Bitmap, Rect>? {
+        val rawFrameBitmap = decodeFrameBitmap(context, selectedFilter) ?: return null
+        val frameW = rawFrameBitmap.width
+        val frameH = rawFrameBitmap.height
+        val windowRect = resolveWindowRect(selectedFilter, rawFrameBitmap, frameW, frameH)
+
+        val composite = Bitmap.createBitmap(frameW, frameH, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(composite)
+        canvas.drawBitmap(rawFrameBitmap, 0f, 0f, null)
+
+        if (selectedFilter.showBrandingOverlay) {
+            drawBrandingOverlay(context, canvas, frameW, frameH, windowRect, selectedFilter.badgeCorner)
+        }
+
+        return composite to windowRect
+    }
+
+    private fun decodeFrameBitmap(context: Context, selectedFilter: FilterType): Bitmap? {
+        return selectedFilter.frameAssetPath?.let { assetPath ->
+            runCatching {
+                context.assets.open(assetPath).use { inputStream ->
+                    val options = BitmapFactory.Options().apply {
+                        inPreferredConfig = Bitmap.Config.ARGB_8888
+                        inPremultiplied = true
+                    }
+                    BitmapFactory.decodeStream(inputStream, null, options)
+                }
+            }.getOrNull()
+        }
+    }
+
+    private fun resolveWindowRect(selectedFilter: FilterType, rawFrameBitmap: Bitmap, frameW: Int, frameH: Int): Rect {
+        val activeWindow = FrameWindowDetector.detectTransparentWindow(rawFrameBitmap)
+            ?: selectedFilter.frameDefinition?.fallbackWindow
+            ?: NormalizedRect(0f, 0f, 1f, 1f)
+        return activeWindow.toPixelRect(frameW, frameH)
     }
 
     private val CORNER_LOGO_ASSETS = listOf(
