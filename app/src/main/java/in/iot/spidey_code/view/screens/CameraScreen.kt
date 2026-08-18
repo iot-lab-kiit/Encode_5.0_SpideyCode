@@ -3,11 +3,13 @@ package `in`.iot.spidey_code.view.screens
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
+import androidx.camera.core.AspectRatio
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
@@ -17,24 +19,11 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cameraswitch
-import androidx.compose.material.icons.filled.Face
-import androidx.compose.material.icons.outlined.Face
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -46,9 +35,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -56,18 +45,21 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import `in`.iot.spidey_code.data.model.FilterType
+import `in`.iot.spidey_code.data.model.NormalizedRect
 import `in`.iot.spidey_code.data.model.displayName
-import `in`.iot.spidey_code.ui.theme.SpideyRed
-import `in`.iot.spidey_code.view.components.CameraPermissionNotice
-import `in`.iot.spidey_code.view.components.CameraShutterButton
+import `in`.iot.spidey_code.data.model.frameDefinition
+import `in`.iot.spidey_code.utils.FrameWindowDetector
+import `in`.iot.spidey_code.utils.ImageCompositionUtils
+import `in`.iot.spidey_code.view.components.CameraControls
 import `in`.iot.spidey_code.view.components.CameraTopBar
-import `in`.iot.spidey_code.view.components.FaceOverlayCanvas
-import `in`.iot.spidey_code.view.components.SpideyNetAnimation
+import `in`.iot.spidey_code.view.components.CameraViewport
 import `in`.iot.spidey_code.vm.CameraViewModel
-import java.io.File
-import java.io.FileOutputStream
 import java.util.concurrent.Executors
 
+/**
+ * Screen orchestrator for camera view, handling camera permission lifecycle,
+ * ML Kit face detection analyzer binding, and high-level component coordination.
+ */
 @Composable
 fun CameraScreen(
     selectedFilter: FilterType,
@@ -85,15 +77,42 @@ fun CameraScreen(
 
     var isCapturing by remember { mutableStateOf(false) }
 
+    val frameDefinition = selectedFilter.frameDefinition
+
+    val frameImageBitmap = remember(context, selectedFilter) {
+        frameDefinition?.assetPath?.let { assetPath ->
+            runCatching {
+                context.assets.open(assetPath).use { inputStream ->
+                    val options = BitmapFactory.Options().apply {
+                        inPreferredConfig = Bitmap.Config.ARGB_8888
+                        inPremultiplied = true
+                    }
+                    BitmapFactory.decodeStream(inputStream, null, options)?.asImageBitmap()
+                }
+            }.getOrNull()
+        }
+    }
+
+    val normalizedWindow: NormalizedRect? = remember(frameImageBitmap, frameDefinition) {
+        if (frameImageBitmap != null) {
+            val androidBitmap = frameImageBitmap.asAndroidBitmap()
+            FrameWindowDetector.detectTransparentWindow(androidBitmap)
+                ?: frameDefinition?.fallbackWindow
+        } else {
+            frameDefinition?.fallbackWindow
+        }
+    }
 
     val previewView = remember {
         PreviewView(context).apply {
             scaleType = PreviewView.ScaleType.FILL_CENTER
+            setBackgroundColor(android.graphics.Color.BLACK)
         }
     }
 
     val imageCapture = remember {
         ImageCapture.Builder()
+            .setTargetAspectRatio(AspectRatio.RATIO_4_3)
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
             .build()
     }
@@ -136,11 +155,14 @@ fun CameraScreen(
             try {
                 val cameraProvider = cameraProviderFuture.get()
 
-                val preview = Preview.Builder().build().also {
-                    it.setSurfaceProvider(previewView.surfaceProvider)
-                }
+                val preview = Preview.Builder()
+                    .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+                    .build().also {
+                        it.setSurfaceProvider(previewView.surfaceProvider)
+                    }
 
                 val imageAnalysis = ImageAnalysis.Builder()
+                    .setTargetAspectRatio(AspectRatio.RATIO_4_3)
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
 
@@ -163,12 +185,8 @@ fun CameraScreen(
                                     isFrontCamera = isFrontCamera
                                 )
                             }
-                            .addOnFailureListener {
-                                // Ignore frame error
-                            }
-                            .addOnCompleteListener {
-                                imageProxy.close()
-                            }
+                            .addOnFailureListener { }
+                            .addOnCompleteListener { imageProxy.close() }
                     } else {
                         imageProxy.close()
                     }
@@ -209,164 +227,99 @@ fun CameraScreen(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
+            .navigationBarsPadding()
     ) {
-        if (isPermissionGranted) {
-            // 1. Full-Screen Edge-to-Edge Camera Viewport
-            AndroidView(
-                factory = { previewView },
-                modifier = Modifier.fillMaxSize()
-            )
-
-            // 2. Real-Time Face Detection Overlay Component
-            FaceOverlayCanvas(
-                faces = detectedFaces,
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // 1. Main Frame Poster Viewport (occupies top area)
+            CameraViewport(
+                isPermissionGranted = isPermissionGranted,
+                previewView = previewView,
+                detectedFaces = detectedFaces,
                 isMaskEnabled = isMaskEnabled,
-                modifier = Modifier.fillMaxSize()
+                frameImageBitmap = frameImageBitmap,
+                normalizedWindow = normalizedWindow,
+                onRequestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) },
+                modifier = Modifier.weight(1f)
             )
 
-            // 3. Top Controls: CameraTopBar Component
-            CameraTopBar(
-                filterName = selectedFilter.displayName(),
-                onBack = onNavigateBack,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+            // 2. Compact Bottom Control Bar
+            CameraControls(
+                isMaskEnabled = isMaskEnabled,
+                isCapturing = isCapturing,
+                onToggleMask = { viewModel.toggleMaskEnabled() },
+                onShutterClick = {
+                    isCapturing = true
+                    val facesSnapshot = detectedFaces.toList()
+                    val isMaskEnabledSnapshot = isMaskEnabled
+                    val cameraExecutor = Executors.newSingleThreadExecutor()
 
-            // 4. Bottom Controls: [ Face Mask Toggle ] [ Camera Shutter Button ] [ Camera Switch ]
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 24.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Face Mask Toggle (LEFT)
-                IconButton(
-                    onClick = { viewModel.toggleMaskEnabled() },
-                    modifier = Modifier
-                        .size(52.dp)
-                        .background(
-                            color = if (isMaskEnabled) SpideyRed.copy(alpha = 0.85f) else Color.Black.copy(alpha = 0.55f),
-                            shape = CircleShape
-                        )
-                        .border(
-                            width = 2.dp,
-                            color = if (isMaskEnabled) Color.White else Color.White.copy(alpha = 0.3f),
-                            shape = CircleShape
-                        )
-                ) {
-                    Icon(
-                        imageVector = if (isMaskEnabled) Icons.Filled.Face else Icons.Outlined.Face,
-                        contentDescription = "Toggle Face Mask",
-                        tint = Color.White
-                    )
-                }
+                    imageCapture.takePicture(
+                        cameraExecutor,
+                        object : ImageCapture.OnImageCapturedCallback() {
+                            override fun onCaptureSuccess(imageProxy: ImageProxy) {
+                                val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+                                val rawBitmap = imageProxy.toBitmap()
 
-                // Camera Shutter Button (CENTER - visually dominant)
-                Box(
-                    contentAlignment = Alignment.Center
-                ) {
-                    CameraShutterButton(
-                        isCapturing = isCapturing,
-                        onClick = {
-                            isCapturing = true
-                            val cameraExecutor = Executors.newSingleThreadExecutor()
-                            imageCapture.takePicture(
-                                cameraExecutor,
-                                object : ImageCapture.OnImageCapturedCallback() {
-                                    override fun onCaptureSuccess(imageProxy: ImageProxy) {
-                                        val rotationDegrees = imageProxy.imageInfo.rotationDegrees
-                                        val rawBitmap = imageProxy.toBitmap()
-
-                                        val matrix = Matrix().apply {
-                                            postRotate(rotationDegrees.toFloat())
-                                            if (isFrontCamera) {
-                                                postScale(-1f, 1f)
-                                            }
-                                        }
-
-                                        val rotatedBitmap = Bitmap.createBitmap(
-                                            rawBitmap,
-                                            0,
-                                            0,
-                                            rawBitmap.width,
-                                            rawBitmap.height,
-                                            matrix,
-                                            true
-                                        )
-
-                                        imageProxy.close()
-
-                                        val photoFile = File(
-                                            context.cacheDir,
-                                            "captured_spidey_${System.currentTimeMillis()}.jpg"
-                                        )
-
-                                        try {
-                                            FileOutputStream(photoFile).use { out ->
-                                                rotatedBitmap.compress(Bitmap.CompressFormat.JPEG, 92, out)
-                                            }
-                                        } catch (e: Exception) {
-                                            e.printStackTrace()
-                                        }
-
-                                        cameraExecutor.shutdown()
-
-                                        ContextCompat.getMainExecutor(context).execute {
-                                            isCapturing = false
-                                            if (photoFile.exists() && photoFile.length() > 0) {
-                                                val fileUri = Uri.fromFile(photoFile).toString()
-                                                onNavigateToReview(selectedFilter, fileUri)
-                                            }
-                                        }
-                                    }
-
-                                    override fun onError(exception: ImageCaptureException) {
-                                        exception.printStackTrace()
-                                        cameraExecutor.shutdown()
-                                        ContextCompat.getMainExecutor(context).execute {
-                                            isCapturing = false
-                                        }
+                                val matrix = Matrix().apply {
+                                    postRotate(rotationDegrees.toFloat())
+                                    if (isFrontCamera) {
+                                        postScale(-1f, 1f)
                                     }
                                 }
-                            )
+
+                                val rotatedBitmap = Bitmap.createBitmap(
+                                    rawBitmap,
+                                    0,
+                                    0,
+                                    rawBitmap.width,
+                                    rawBitmap.height,
+                                    matrix,
+                                    true
+                                )
+                                imageProxy.close()
+
+                                val photoFile = ImageCompositionUtils.createComposedPoster(
+                                    context = context,
+                                    rotatedBitmap = rotatedBitmap,
+                                    selectedFilter = selectedFilter,
+                                    isMaskEnabled = isMaskEnabledSnapshot,
+                                    facesSnapshot = facesSnapshot,
+                                    previewWidth = previewView.width.toFloat(),
+                                    previewHeight = previewView.height.toFloat()
+                                )
+
+                                cameraExecutor.shutdown()
+
+                                ContextCompat.getMainExecutor(context).execute {
+                                    isCapturing = false
+                                    if (photoFile != null && photoFile.exists() && photoFile.length() > 0) {
+                                        val fileUri = Uri.fromFile(photoFile).toString()
+                                        onNavigateToReview(selectedFilter, fileUri)
+                                    }
+                                }
+                            }
+
+                            override fun onError(exception: ImageCaptureException) {
+                                exception.printStackTrace()
+                                cameraExecutor.shutdown()
+                                ContextCompat.getMainExecutor(context).execute {
+                                    isCapturing = false
+                                }
+                            }
                         }
                     )
-
-                    SpideyNetAnimation(
-                        modifier = Modifier.size(110.dp)
-                    )
-                }
-
-                // Camera Switch Button (RIGHT)
-                IconButton(
-                    onClick = { viewModel.toggleCameraFacing() },
-                    modifier = Modifier
-                        .size(52.dp)
-                        .background(
-                            color = Color.Black.copy(alpha = 0.55f),
-                            shape = CircleShape
-                        )
-                        .border(
-                            width = 2.dp,
-                            color = Color.White.copy(alpha = 0.3f),
-                            shape = CircleShape
-                        )
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Cameraswitch,
-                        contentDescription = "Switch Camera",
-                        tint = Color.White
-                    )
-                }
-            }
-        } else {
-            // Permission Denied View Component
-            CameraPermissionNotice(
-                onRequestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) }
+                },
+                onToggleCameraFacing = { viewModel.toggleCameraFacing() }
             )
         }
+
+        // TOPMOST Compose Layer: Floating Islands Top Control Bar
+        CameraTopBar(
+            filterName = selectedFilter.displayName(),
+            onBack = onNavigateBack,
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
     }
 }

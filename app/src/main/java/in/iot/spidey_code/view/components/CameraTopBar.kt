@@ -1,20 +1,20 @@
 package `in`.iot.spidey_code.view.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -29,44 +29,52 @@ fun CameraTopBar(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val darkTranslucentBg = Color.Black.copy(alpha = 0.65f)
+    val subtleBorderColor = Color.White.copy(alpha = 0.15f)
+
     Box(
         modifier = modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        // Top-Left Compact Back Button
+        // Floating Rounded-Square Back Button (Top-Left)
         IconButton(
             onClick = onBack,
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .size(42.dp)
+                .size(40.dp)
                 .background(
-                    color = Color.Black.copy(alpha = 0.55f),
-                    shape = CircleShape
+                    color = darkTranslucentBg,
+                    shape = RoundedCornerShape(12.dp)
+                )
+                .border(
+                    width = 1.dp,
+                    color = subtleBorderColor,
+                    shape = RoundedCornerShape(12.dp)
                 )
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
-                tint = Color.White
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
             )
         }
 
-        // Centered Dynamic Island-Style Filter Pill
-        Card(
+        // Floating Centered Mode Indicator Pill (Truly Centered)
+        Surface(
             modifier = Modifier.align(Alignment.Center),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.Black.copy(alpha = 0.75f)
-            ),
-            shape = RoundedCornerShape(24.dp)
+            color = darkTranslucentBg,
+            shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(1.dp, subtleBorderColor)
         ) {
             Text(
                 text = filterName,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
                 color = Color.White,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
         }
     }

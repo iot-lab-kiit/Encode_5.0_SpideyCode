@@ -49,10 +49,14 @@ fun GearSelectionScreen(
                 item {
                     FilterCard(
                         filterType = FilterType.CLASSIC_MASK,
-                        title = "Classic Mask trial",
-                        description = "Iconic red & webbed hero mask overlay.",
+                        title = "Classic",
+                        description = null,
                         isSelected = selectedFilter == FilterType.CLASSIC_MASK,
-                        onSelect = { viewModel.selectFilter(FilterType.CLASSIC_MASK) }
+                        onSelect = {
+                            viewModel.selectFilter(FilterType.CLASSIC_MASK)
+                            onNavigateToCamera(FilterType.CLASSIC_MASK)
+                        },
+                        isClickable = true
                     )
                 }
                 item {
@@ -60,8 +64,9 @@ fun GearSelectionScreen(
                         filterType = FilterType.WEB_SHOOTER,
                         title = "Web Shooter",
                         description = "Tactical web shooter reticle & crosshair.",
-                        isSelected = selectedFilter == FilterType.WEB_SHOOTER,
-                        onSelect = { viewModel.selectFilter(FilterType.WEB_SHOOTER) }
+                        isSelected = false,
+                        onSelect = { },
+                        isClickable = false
                     )
                 }
                 item {
@@ -69,17 +74,19 @@ fun GearSelectionScreen(
                         filterType = FilterType.SPIDEY_SENSE,
                         title = "Spidey Sense",
                         description = "Sensory aura lines & warning pulse.",
-                        isSelected = selectedFilter == FilterType.SPIDEY_SENSE,
-                        onSelect = { viewModel.selectFilter(FilterType.SPIDEY_SENSE) }
+                        isSelected = false,
+                        onSelect = { },
+                        isClickable = false
                     )
                 }
                 item {
                     FilterCard(
                         filterType = FilterType.NONE,
-                        title = "No Mask ",
+                        title = "No Mask",
                         description = "Clean view without active overlay.",
-                        isSelected = selectedFilter == FilterType.NONE,
-                        onSelect = { viewModel.selectFilter(FilterType.NONE) }
+                        isSelected = false,
+                        onSelect = { },
+                        isClickable = false
                     )
                 }
             }
@@ -88,7 +95,7 @@ fun GearSelectionScreen(
 
             ContinueButton(
                 text = "CONTINUE TO CAMERA",
-                onClick = { onNavigateToCamera(selectedFilter) }
+                onClick = { onNavigateToCamera(FilterType.CLASSIC_MASK) }
             )
         }
     }
