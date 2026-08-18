@@ -49,20 +49,21 @@ object SpideyMaskReference {
 @Composable
 fun FaceOverlayCanvas(
     faces: List<TransformedFaceData>,
-    isMaskEnabled: Boolean = true,
+    isMaskEnabled: Boolean = false,
     modifier: Modifier = Modifier,
-    boxColor: Color = Color(0xFF00FF66), // High-visibility neon green
-    strokeWidthDp: Float = 3f,
     showDebugBoundingBox: Boolean = false
 ) {
     val context = LocalContext.current
-    val strokeWidthPx = Stroke(width = strokeWidthDp.dp.value).width
 
     // Cache the PNG mask bitmap once so it is not decoded on every camera frame
     val maskImageBitmap: ImageBitmap? = remember(context) {
         try {
             context.assets.open("masks/spidey_mask.png").use { inputStream ->
-                BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
+                val options = BitmapFactory.Options().apply {
+                    inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
+                    inPremultiplied = true
+                }
+                BitmapFactory.decodeStream(inputStream, null, options)?.asImageBitmap()
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -70,7 +71,7 @@ fun FaceOverlayCanvas(
         }
     }
 
-    if (!isMaskEnabled) return
+    if (!isMaskEnabled || faces.isEmpty()) return
 
     Canvas(modifier = modifier.fillMaxSize()) {
         for (faceData in faces) {
@@ -91,17 +92,14 @@ fun FaceOverlayCanvas(
 
                 val detectedEyeAngleDeg = Math.toDegrees(atan2(dy, dx).toDouble()).toFloat()
 
-                // Scale derived exclusively from transformed face bounding box width
                 val scaleFactor = box.width() / SpideyMaskReference.referenceMaskFaceWidth
-
-                // Rotation delta derived exclusively from eye-line angle
                 val deltaAngleDeg = detectedEyeAngleDeg - SpideyMaskReference.maskEyeAngleDeg
 
-                // Matrix Transformation Pipeline:
-                // 1. Move maskEyeCenter to local origin (0, 0)
-                // 2. Scale & vertically orient (scaleX, scaleY) around (0, 0)
-                // 3. Rotate around (0, 0) according to eye-line tilt
-                // 4. Translate (0, 0) to detectedEyeCenter on screen
+                android.util.Log.d(
+                    "MaskTransform",
+                    "LIVE: canvasSize=${size.width}x${size.height}, boxWidth=${box.width()}, eyeCenter=$detectedEyeCenter, scaleFactor=$scaleFactor, deltaAngle=$deltaAngleDeg"
+                )
+
                 withTransform({
                     translate(left = detectedEyeCenter.x, top = detectedEyeCenter.y)
                     rotate(degrees = deltaAngleDeg, pivot = Offset.Zero)
@@ -114,13 +112,13 @@ fun FaceOverlayCanvas(
                 }
             }
 
-            // 2. Debug Overlay: Face Bounding Box Outline (Disabled by default)
+            // 2. Debug Overlay (strictly disabled by default)
             if (showDebugBoundingBox) {
                 drawRect(
-                    color = boxColor,
+                    color = Color.Red,
                     topLeft = Offset(box.left, box.top),
                     size = Size(box.width(), box.height()),
-                    style = Stroke(width = strokeWidthPx)
+                    style = Stroke(width = 2.dp.toPx())
                 )
             }
         }

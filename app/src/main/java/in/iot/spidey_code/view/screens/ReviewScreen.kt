@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -110,39 +111,44 @@ fun ReviewScreen(
                 .statusBarsPadding()
                 .navigationBarsPadding()
         ) {
+            // Top Bar
             ReviewTopBar(
                 filterName = selectedFilter.displayName(),
                 onBack = handleReturnHome
             )
 
+            // Main Poster Display Area: Occupies full available space between top bar & bottom action row
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 124.dp),
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
                 contentAlignment = Alignment.Center
             ) {
                 CapturedImagePreviewCard(
                     capturedBitmap = capturedBitmap,
-                    imageUri = imageUri,
-                    modifier = Modifier.fillMaxSize()
+                    imageUri = imageUri
                 )
             }
-        }
 
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            ReviewActionRow(
-                onDownload = { saveImageToGallery(context, imageUri) },
-                onShare = { shareImage(context, imageUri) },
-                onRetake = handleReturnHome
-            )
+            // Bottom Control Action Row (Download / Share / Retake)
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = Color.Transparent
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    ReviewActionRow(
+                        onDownload = { saveImageToGallery(context, imageUri) },
+                        onShare = { shareImage(context, imageUri) },
+                        onRetake = handleReturnHome
+                    )
+                }
+            }
         }
     }
 }

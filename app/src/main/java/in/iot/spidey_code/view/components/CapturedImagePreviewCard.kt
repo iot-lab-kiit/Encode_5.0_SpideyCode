@@ -23,16 +23,27 @@ import `in`.iot.spidey_code.ui.theme.SpiderBorderBlack
 import `in`.iot.spidey_code.ui.theme.SpiderPrimaryContainer
 import `in`.iot.spidey_code.ui.theme.SpiderSurfaceContainer
 
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.runtime.remember
+
 @Composable
 fun CapturedImagePreviewCard(
     capturedBitmap: Bitmap?,
     imageUri: String?,
     modifier: Modifier = Modifier
 ) {
+    val imageAspectRatio = remember(capturedBitmap) {
+        if (capturedBitmap != null && capturedBitmap.height > 0) {
+            capturedBitmap.width.toFloat() / capturedBitmap.height.toFloat()
+        } else {
+            9f / 16f
+        }
+    }
+
     BrutalistBox(
         modifier = modifier
             .fillMaxWidth()
-            .fillMaxHeight(),
+            .aspectRatio(imageAspectRatio),
         shape = RoundedCornerShape(8.dp),
         bg = SpiderSurfaceContainer,
         borderColor = SpiderBorderBlack,
@@ -43,7 +54,7 @@ fun CapturedImagePreviewCard(
             Image(
                 bitmap = capturedBitmap.asImageBitmap(),
                 contentDescription = "Captured Photo",
-                contentScale = ContentScale.Crop,
+                contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize()
             )
         } else if (imageUri != null) {
