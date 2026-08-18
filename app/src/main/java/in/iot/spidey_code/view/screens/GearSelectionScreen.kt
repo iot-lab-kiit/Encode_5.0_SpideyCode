@@ -1,25 +1,42 @@
 package `in`.iot.spidey_code.view.screens
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.material3.Scaffold
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import `in`.iot.spidey_code.data.model.FilterType
+import `in`.iot.spidey_code.ui.theme.SpiderSurface
 import `in`.iot.spidey_code.view.components.ContinueButton
 import `in`.iot.spidey_code.view.components.FilterCard
 import `in`.iot.spidey_code.view.components.GearSelectionHeader
+import `in`.iot.spidey_code.view.components.SpiderClimbingAnimation
 import `in`.iot.spidey_code.vm.GearSelectionViewModel
 
 @Composable
@@ -28,75 +45,143 @@ fun GearSelectionScreen(
     modifier: Modifier = Modifier,
     viewModel: GearSelectionViewModel = viewModel()
 ) {
+    val context = LocalContext.current
     val selectedFilter by viewModel.selectedFilter.collectAsState()
 
-    Scaffold(modifier = modifier.fillMaxSize()) { innerPadding ->
+    val backgroundBitmap = remember {
+        runCatching {
+            context.assets.open("images/spider_verse_bg.jpg").use { stream ->
+                BitmapFactory.decodeStream(stream)
+            }
+        }.getOrNull()
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(SpiderSurface)
+    ) {
+        if (backgroundBitmap != null) {
+            Image(
+                bitmap = backgroundBitmap.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                alignment = Alignment.Center,
+                colorFilter = ColorFilter.tint(
+                    SpiderSurface,
+                    BlendMode.Multiply
+                ),
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        Canvas(Modifier.fillMaxSize()) {
+            val step = 20.dp.toPx()
+            for (x in 0..(size.width / step).toInt()) {
+                for (y in 0..(size.height / step).toInt()) {
+                    drawCircle(Color(0x0DFFFFFF), 1.dp.toPx(), Offset(x * step, y * step))
+                }
+            }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .padding(20.dp)
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
             GearSelectionHeader()
 
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(vertical = 4.dp),
-                modifier = Modifier.weight(1f)
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Responsive 2x2 Grid using Row/Column weights to fill 100% available screen space
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                item {
+                // Row 1: Classic & Web Shooter
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     FilterCard(
                         filterType = FilterType.CLASSIC_MASK,
                         title = "Classic",
-                        description = null,
                         isSelected = selectedFilter == FilterType.CLASSIC_MASK,
                         onSelect = {
                             viewModel.selectFilter(FilterType.CLASSIC_MASK)
                             onNavigateToCamera(FilterType.CLASSIC_MASK)
                         },
-                        isClickable = true
+                        isClickable = true,
+                        previewBackgroundColor = `in`.iot.spidey_code.ui.theme.SpideyRed.copy(alpha = 0.25f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
                     )
-                }
-                item {
+
                     FilterCard(
                         filterType = FilterType.WEB_SHOOTER,
                         title = "Web Shooter",
-                        description = "Tactical web shooter reticle & crosshair.",
                         isSelected = false,
                         onSelect = { },
-                        isClickable = false
+                        isClickable = false,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
                     )
                 }
-                item {
+
+                // Row 2: Spidey Sense & No Mask
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     FilterCard(
                         filterType = FilterType.SPIDEY_SENSE,
                         title = "Spidey Sense",
-                        description = "Sensory aura lines & warning pulse.",
                         isSelected = false,
                         onSelect = { },
-                        isClickable = false
+                        isClickable = false,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
                     )
-                }
-                item {
+
                     FilterCard(
                         filterType = FilterType.NONE,
                         title = "No Mask",
-                        description = "Clean view without active overlay.",
                         isSelected = false,
                         onSelect = { },
-                        isClickable = false
+                        isClickable = false,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             ContinueButton(
                 text = "CONTINUE TO CAMERA",
                 onClick = { onNavigateToCamera(FilterType.CLASSIC_MASK) }
             )
         }
+
+        // TOP RIGHT CORNER: Spider Climbing Down Animation hanging from top edge
+        SpiderClimbingAnimation(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(end = 8.dp),
+            sizeDp = 110
+        )
     }
 }
