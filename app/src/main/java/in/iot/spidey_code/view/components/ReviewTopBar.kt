@@ -1,66 +1,83 @@
 package `in`.iot.spidey_code.view.components
 
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import `in`.iot.spidey_code.ui.theme.SpiderBorderBlack
+import `in`.iot.spidey_code.ui.theme.SpiderOnSurface
+import `in`.iot.spidey_code.ui.theme.SpiderOnTertiaryContainer
+import `in`.iot.spidey_code.ui.theme.SpiderSecondaryContainer
+import `in`.iot.spidey_code.ui.theme.SpiderSurfaceContainer
+
 
 @Composable
 fun ReviewTopBar(
-    title: String,
     filterName: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Box(
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(48.dp)
+            .height(64.dp)
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(
             onClick = onBack,
-            modifier = Modifier.align(Alignment.CenterStart)
+            modifier = Modifier
+                .size(40.dp)
+                .background(SpiderSurfaceContainer, CircleShape)
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back to Home"
+                contentDescription = "Back",
+                tint = SpiderOnSurface,
+                modifier = Modifier.size(24.dp)
             )
         }
 
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.align(Alignment.Center)
-        )
+        Spacer(modifier = Modifier.weight(1f))
 
-        Card(
-            modifier = Modifier.align(Alignment.CenterEnd),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
-            ),
-            shape = RoundedCornerShape(12.dp)
+        BrutalistBox(
+            modifier = Modifier.skewX(-12f),
+            shape = RoundedCornerShape(2.dp),
+            bg = SpiderSecondaryContainer,
+            borderColor = SpiderBorderBlack,
+            borderWidth = 2.dp,
+            shadowOffset = 4.dp
         ) {
             Text(
-                text = filterName,
-                style = MaterialTheme.typography.labelSmall,
+                text = filterName.uppercase(),
+                color = SpiderOnTertiaryContainer,
+                fontSize = 14.sp,
+                lineHeight = 16.sp,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                letterSpacing = 1.4.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                    .skewX(12f)
             )
         }
     }
