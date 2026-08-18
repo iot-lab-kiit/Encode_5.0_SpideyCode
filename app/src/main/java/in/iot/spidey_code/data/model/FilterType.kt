@@ -24,6 +24,9 @@ val FilterType.frameDefinition: FrameDefinition?
 val FilterType.frameAssetPath: String?
     get() = frameDefinition?.assetPath
 
+val FilterType.thumbnailAssetPath: String?
+    get() = frameAssetPath
+
 fun FilterType.displayName(): String {
     return when (this) {
         FilterType.CLASSIC_MASK -> "Classic"
