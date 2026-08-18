@@ -23,7 +23,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -38,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -46,13 +49,16 @@ import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import `in`.iot.spidey_code.data.model.FilterType
 import `in`.iot.spidey_code.data.model.NormalizedRect
+import `in`.iot.spidey_code.data.model.badgeCorner
 import `in`.iot.spidey_code.data.model.displayName
 import `in`.iot.spidey_code.data.model.frameDefinition
+import `in`.iot.spidey_code.data.model.showBrandingOverlay
 import `in`.iot.spidey_code.utils.FrameWindowDetector
 import `in`.iot.spidey_code.utils.ImageCompositionUtils
 import `in`.iot.spidey_code.view.components.CameraControls
 import `in`.iot.spidey_code.view.components.CameraTopBar
 import `in`.iot.spidey_code.view.components.CameraViewport
+import `in`.iot.spidey_code.view.components.FilterCarousel
 import `in`.iot.spidey_code.vm.CameraViewModel
 import java.util.concurrent.Executors
 
@@ -75,11 +81,16 @@ fun CameraScreen(
     val isFrontCamera by viewModel.isFrontCamera.collectAsState()
     val isMaskEnabled by viewModel.isMaskEnabled.collectAsState()
 
+    // Live-selected filter, switchable in-camera via the filter carousel below.
+    // Seeded once from the Gear Selection nav argument, then owned by the ViewModel.
+    LaunchedEffect(Unit) { viewModel.initializeFilter(selectedFilter) }
+    val activeFilter by viewModel.selectedFilter.collectAsState()
+
     var isCapturing by remember { mutableStateOf(false) }
 
-    val frameDefinition = selectedFilter.frameDefinition
+    val frameDefinition = activeFilter.frameDefinition
 
-    val frameImageBitmap = remember(context, selectedFilter) {
+    val frameImageBitmap = remember(context, activeFilter) {
         frameDefinition?.assetPath?.let { assetPath ->
             runCatching {
                 context.assets.open(assetPath).use { inputStream ->
@@ -240,8 +251,22 @@ fun CameraScreen(
                 isMaskEnabled = isMaskEnabled,
                 frameImageBitmap = frameImageBitmap,
                 normalizedWindow = normalizedWindow,
+                badgeCorner = activeFilter.badgeCorner,
+                showBrandingOverlay = activeFilter.showBrandingOverlay,
                 onRequestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) },
                 modifier = Modifier.weight(1f)
+            )
+
+            // 1b. Snapchat-style filter carousel: swipe or tap to switch the live frame
+            // without leaving the camera screen.
+            FilterCarousel(
+                filters = remember { FilterType.entries.toList() },
+                selectedFilter = activeFilter,
+                onFilterSelected = { viewModel.selectFilter(it) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.95f))
+                    .padding(vertical = 8.dp)
             )
 
             // 2. Compact Bottom Control Bar
@@ -253,6 +278,7 @@ fun CameraScreen(
                     isCapturing = true
                     val facesSnapshot = detectedFaces.toList()
                     val isMaskEnabledSnapshot = isMaskEnabled
+                    val filterSnapshot = activeFilter
                     val cameraExecutor = Executors.newSingleThreadExecutor()
 
                     imageCapture.takePicture(
@@ -283,7 +309,7 @@ fun CameraScreen(
                                 val photoFile = ImageCompositionUtils.createComposedPoster(
                                     context = context,
                                     rotatedBitmap = rotatedBitmap,
-                                    selectedFilter = selectedFilter,
+                                    selectedFilter = filterSnapshot,
                                     isMaskEnabled = isMaskEnabledSnapshot,
                                     facesSnapshot = facesSnapshot,
                                     previewWidth = previewView.width.toFloat(),
@@ -296,7 +322,7 @@ fun CameraScreen(
                                     isCapturing = false
                                     if (photoFile != null && photoFile.exists() && photoFile.length() > 0) {
                                         val fileUri = Uri.fromFile(photoFile).toString()
-                                        onNavigateToReview(selectedFilter, fileUri)
+                                        onNavigateToReview(filterSnapshot, fileUri)
                                     }
                                 }
                             }
@@ -317,7 +343,7 @@ fun CameraScreen(
 
         // TOPMOST Compose Layer: Floating Islands Top Control Bar
         CameraTopBar(
-            filterName = selectedFilter.displayName(),
+            filterName = activeFilter.displayName(),
             onBack = onNavigateBack,
             modifier = Modifier.align(Alignment.TopCenter)
         )

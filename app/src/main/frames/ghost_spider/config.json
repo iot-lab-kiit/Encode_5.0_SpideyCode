@@ -1,0 +1,8 @@
+{
+  "displayName": "Ghost Spider",
+  "outputAsset": "images/frame_ghost_spider.png",
+  "window": { "left": 0.08, "top": 0.16, "width": 0.84, "height": 0.60 },
+  "stickers": [
+    { "file": "sticker_1.png", "x": 0.10, "y": 0.17, "width": 0.28, "yMode": "Top", "binarize": true }
+  ]
+}

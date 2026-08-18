@@ -1,0 +1,8 @@
+{
+  "displayName": "Event Squad",
+  "outputAsset": "images/frame_event_squad.png",
+  "window": { "left": 0.06944, "top": 0.16113, "width": 0.86024, "height": 0.43945 },
+  "stickers": [
+    { "file": "sticker_1.png", "x": 0.09, "y": 0.60058, "width": 0.24, "yMode": "Bottom", "binarize": true }
+  ]
+}

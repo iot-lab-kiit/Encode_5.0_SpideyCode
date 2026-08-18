@@ -1,0 +1,8 @@
+{
+  "displayName": "Spidey Party",
+  "outputAsset": "images/frame_spidey_party.png",
+  "window": { "left": 0.08, "top": 0.18, "width": 0.84, "height": 0.58 },
+  "stickers": [
+    { "file": "sticker_1.png", "x": 0.10, "y": 0.19, "width": 0.88, "yMode": "Top", "binarize": true }
+  ]
+}
