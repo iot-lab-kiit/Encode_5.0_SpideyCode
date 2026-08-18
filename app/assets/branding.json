@@ -1,7 +1,7 @@
 {
   "_comment": "Controls the shared corner-logo + event-badge overlay drawn on every filter except Classic. All values are ratios (0.0-1.0) of the frame's own width/height, so they scale correctly on every device. Edit these directly and rebuild the app -- no script needed.",
 
-  "logoSizeRatio": 0.10,
+  "logoSizeRatio": 0.15,
   "_logoSizeRatio_comment": "Diameter of each corner logo, as a fraction of frame width.",
 
   "logoGapRatio": 0.012,
@@ -14,6 +14,6 @@
   "badgeWidthRatio": 0.34,
   "_badgeWidthRatio_comment": "Width of the ENCODE 5.0 X ZENITHCUP badge, as a fraction of frame width (height follows its own aspect ratio).",
 
-  "badgeInsetRatio": 0.65,
+  "badgeInsetRatio": 0.85,
   "_badgeInsetRatio_comment": "How far the badge sits over the photo vs. over the frame border, at whichever bottom corner that filter uses. 0.65 means 65% of the badge's width overlaps the photo side, 35% overlaps the frame border. 0.5 would center it exactly on the corner."
 }
