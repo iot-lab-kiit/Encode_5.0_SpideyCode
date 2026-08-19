@@ -3,6 +3,6 @@
   "outputAsset": "images/frame_minispider.png",
   "window": { "left": 0.17188, "top": 0.23438, "width": 0.65625, "height": 0.37793 },
   "stickers": [
-    { "file": "sticker_1.png", "x": 0.19, "y": 0.61231, "width": 0.30, "yMode": "Bottom", "binarize": true }
+    { "file": "sticker_2.png", "x": 0.135, "y": 0.21, "width": 0.32, "yMode": "Top" }
   ]
 }
