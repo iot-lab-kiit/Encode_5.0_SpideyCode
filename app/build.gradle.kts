@@ -17,13 +17,34 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Nearly every phone since ~2017 is arm64. Shipping x86_64/x86/armeabi-v7a
+        // native libs too (CameraX, ML Kit, Media3) quadruples lib/ for zero benefit
+        // on a real device -- ~24MB of dead weight. Trade-off: this APK won't install
+        // on x86 emulators or old 32-bit-only devices; fine for installing directly on
+        // known event-booth phones, not for wide public distribution via Play Store
+        // (which would use App Bundles + per-device delivery instead of this filter).
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
     }
 
     buildTypes {
         release {
+            // NOTE: R8 shrinking was briefly enabled to cut APK size, but it broke the
+            // camera screen at runtime -- a DisposableEffect teardown lambda in
+            // CameraScreen.kt started crashing with an NPE right when camera permission
+            // is granted (only reproduces in the minified build; traced via the R8
+            // mapping file, not yet root-caused to a specific fix). Reverted to keep the
+            // app working; re-enabling this needs on-device testing time this isn't safe
+            // to ship without. See proguard-rules.pro for where keep rules would go.
             optimization {
                 enable = false
             }
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
     compileOptions {
