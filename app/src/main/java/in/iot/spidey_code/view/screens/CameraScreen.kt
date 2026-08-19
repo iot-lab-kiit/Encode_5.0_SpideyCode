@@ -147,7 +147,10 @@ fun CameraScreen(
     val imageCapture = remember {
         ImageCapture.Builder()
             .setTargetAspectRatio(AspectRatio.RATIO_4_3)
-            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+            // Trades a little shutter latency for CameraX's higher-quality capture pipeline
+            // (better noise reduction/processing on most devices) -- worth it for a photobooth
+            // shot people will keep, unlike a burst-mode/action-shot use case.
+            .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
             .build()
     }
 
