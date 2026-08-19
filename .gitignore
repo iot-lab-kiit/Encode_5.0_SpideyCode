@@ -13,6 +13,17 @@ captures/
 *.iml
 .DS_Store
 
+# Signing keys and release artifacts -- never commit these
+*.jks
+*.keystore
+/app/release/
+*.apk
+
+# frames/<filter>/preview.png is a local convenience render (regenerate via
+# tools/build-frames.ps1) -- not committed, so multi-MB images don't get
+# duplicated in git history every time a frame is tweaked.
+app/src/main/frames/*/preview.png
+
 # Test directories and files
 /app/src/test/
 /app/src/androidTest/
