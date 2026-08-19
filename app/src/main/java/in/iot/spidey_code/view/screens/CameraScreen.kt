@@ -1,13 +1,11 @@
 package `in`.iot.spidey_code.view.screens
 
 import android.Manifest
-import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
-import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -22,7 +20,7 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.core.UseCase
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.video.MediaStoreOutputOptions
+import androidx.camera.video.FileOutputOptions
 import androidx.camera.video.Quality
 import androidx.camera.video.QualitySelector
 import androidx.camera.video.Recorder
@@ -38,6 +36,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -68,12 +68,14 @@ import `in`.iot.spidey_code.data.model.frameDefinition
 import `in`.iot.spidey_code.data.model.showBrandingOverlay
 import `in`.iot.spidey_code.utils.FrameWindowDetector
 import `in`.iot.spidey_code.utils.ImageCompositionUtils
+import `in`.iot.spidey_code.utils.VideoCompositionUtils
 import `in`.iot.spidey_code.view.components.CameraControls
 import `in`.iot.spidey_code.view.components.CameraTopBar
 import `in`.iot.spidey_code.view.components.CameraViewport
 import `in`.iot.spidey_code.view.components.FilterCarousel
 import `in`.iot.spidey_code.vm.CameraViewModel
 import `in`.iot.spidey_code.vm.FlashMode
+import java.io.File
 import java.util.concurrent.Executors
 
 /** Max length of a held-to-record clip, matching a short social-video style limit. */
@@ -87,6 +89,7 @@ private const val MAX_RECORDING_MS = 15_000L
 fun CameraScreen(
     selectedFilter: FilterType,
     onNavigateToReview: (FilterType, String) -> Unit,
+    onNavigateToVideoReview: (FilterType, String) -> Unit,
     onNavigateBack: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: CameraViewModel = viewModel()
@@ -162,6 +165,7 @@ fun CameraScreen(
     }
     val videoCapture = remember { VideoCapture.withOutput(recorder) }
     var activeRecording by remember { mutableStateOf<Recording?>(null) }
+    var isProcessingVideo by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -213,28 +217,11 @@ fun CameraScreen(
     fun startRecording() {
         if (activeRecording != null) return
 
-        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
-        ) {
-            Toast.makeText(context, "Storage permission needed to save video", Toast.LENGTH_SHORT).show()
-            storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-            return
-        }
-
-        val name = "spidey_video_${System.currentTimeMillis()}"
-        val contentValues = ContentValues().apply {
-            // MediaStore needs either a file extension on the display name or an explicit
-            // MIME type to know what kind of file to create -- without either, some
-            // ContentResolver implementations silently fail the insert (returns null),
-            // which CameraX then reports as "Unable to create MediaStore file."
-            put(MediaStore.Video.Media.DISPLAY_NAME, "$name.mp4")
-            put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-            put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/SpideyCode")
-        }
-        val outputOptions = MediaStoreOutputOptions.Builder(
-            context.contentResolver,
-            MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-        ).setContentValues(contentValues).build()
+        // Record to a temp cache file first (not straight to the gallery) so the frame
+        // decoration can be baked in and the user can review before it's saved anywhere
+        // permanent -- same pattern as photos.
+        val rawVideoFile = File(context.cacheDir, "raw_spidey_video_${System.currentTimeMillis()}.mp4")
+        val outputOptions = FileOutputOptions.Builder(rawVideoFile).build()
 
         val hasAudioPermission = ContextCompat.checkSelfPermission(
             context,
@@ -245,15 +232,32 @@ fun CameraScreen(
             if (hasAudioPermission) it.withAudioEnabled() else it
         }
 
+        val filterSnapshot = activeFilter
         viewModel.startRecordingTimer()
         activeRecording = pending.start(ContextCompat.getMainExecutor(context)) { event ->
             if (event is VideoRecordEvent.Finalize) {
                 activeRecording = null
                 viewModel.stopRecordingTimer()
-                if (!event.hasError()) {
-                    Toast.makeText(context, "Video saved to gallery", Toast.LENGTH_SHORT).show()
-                } else {
+                if (event.hasError()) {
                     Toast.makeText(context, "Recording failed: ${event.cause?.message}", Toast.LENGTH_SHORT).show()
+                    return@start
+                }
+
+                isProcessingVideo = true
+                val framedVideoFile = File(context.cacheDir, "framed_spidey_video_${System.currentTimeMillis()}.mp4")
+                VideoCompositionUtils.composeVideoWithFrame(
+                    context = context,
+                    rawVideoFile = rawVideoFile,
+                    selectedFilter = filterSnapshot,
+                    outputFile = framedVideoFile
+                ) { composedFile ->
+                    isProcessingVideo = false
+                    rawVideoFile.delete()
+                    if (composedFile != null) {
+                        onNavigateToVideoReview(filterSnapshot, Uri.fromFile(composedFile).toString())
+                    } else {
+                        Toast.makeText(context, "Couldn't process video", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }
@@ -497,5 +501,25 @@ fun CameraScreen(
             onCycleFlash = { viewModel.cycleFlashMode() },
             modifier = Modifier.align(Alignment.TopCenter)
         )
+
+        // Baking the frame into the recorded clip takes a few seconds -- block input with a
+        // clear "processing" state rather than leaving the screen looking stuck.
+        if (isProcessingVideo) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.75f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = Color.White)
+                    Text(
+                        text = "Adding your frame...",
+                        color = Color.White,
+                        modifier = Modifier.padding(top = 16.dp)
+                    )
+                }
+            }
+        }
     }
 }
