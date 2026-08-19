@@ -5,11 +5,17 @@ import android.graphics.PointF
 import android.graphics.RectF
 import android.util.Log
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceLandmark
+import `in`.iot.spidey_code.data.model.FilterType
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlin.math.max
 import kotlin.math.min
 
@@ -17,6 +23,24 @@ data class TransformedFaceData(
     val boundingBox: RectF,
     val leftEye: PointF? = null,
     val rightEye: PointF? = null
+)
+
+/** Capture flash mode, independent of any CameraX type so the ViewModel stays framework-free. */
+enum class FlashMode {
+    OFF, AUTO, ON;
+
+    fun next(): FlashMode = when (this) {
+        OFF -> AUTO
+        AUTO -> ON
+        ON -> OFF
+    }
+}
+
+private data class SmoothedFaceState(
+    var boundingBox: RectF,
+    var leftEye: PointF?,
+    var rightEye: PointF?,
+    var lastSeenAtMs: Long
 )
 
 class CameraViewModel : ViewModel() {
@@ -36,6 +60,63 @@ class CameraViewModel : ViewModel() {
     private val _isMaskEnabled = MutableStateFlow(false)
     val isMaskEnabled: StateFlow<Boolean> = _isMaskEnabled.asStateFlow()
 
+    private val _flashMode = MutableStateFlow(FlashMode.OFF)
+    val flashMode: StateFlow<FlashMode> = _flashMode.asStateFlow()
+
+    // Live-selected filter/frame, switchable in-camera via the Snapchat-style filter
+    // carousel without leaving the screen. Seeded once from the Gear Selection nav
+    // argument (see initializeFilter), then owned entirely by this ViewModel.
+    private val _selectedFilter = MutableStateFlow(FilterType.CLASSIC_MASK)
+    val selectedFilter: StateFlow<FilterType> = _selectedFilter.asStateFlow()
+    private var filterInitialized = false
+
+    // Hold-to-record video state (Snapchat-style: tap = photo, press & hold = video).
+    private val _isRecording = MutableStateFlow(false)
+    val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
+
+    private val _recordingElapsedMs = MutableStateFlow(0L)
+    val recordingElapsedMs: StateFlow<Long> = _recordingElapsedMs.asStateFlow()
+
+    private var recordingTimerJob: Job? = null
+
+    // Per-tracked-face smoothing state for the live mask overlay (see processDetectedFaces).
+    private val smoothedFaces = mutableMapOf<Int, SmoothedFaceState>()
+
+    fun initializeFilter(filter: FilterType) {
+        if (!filterInitialized) {
+            _selectedFilter.value = filter
+            filterInitialized = true
+        }
+    }
+
+    fun selectFilter(filter: FilterType) {
+        _selectedFilter.value = filter
+    }
+
+    fun cycleFlashMode() {
+        _flashMode.value = _flashMode.value.next()
+    }
+
+    fun startRecordingTimer() {
+        _isRecording.value = true
+        _recordingElapsedMs.value = 0L
+        recordingTimerJob?.cancel()
+        recordingTimerJob = viewModelScope.launch {
+            val startTime = System.currentTimeMillis()
+            while (isActive) {
+                _recordingElapsedMs.value = System.currentTimeMillis() - startTime
+                delay(30)
+            }
+        }
+    }
+
+    fun stopRecordingTimer() {
+        _isRecording.value = false
+        recordingTimerJob?.cancel()
+        recordingTimerJob = null
+        _recordingElapsedMs.value = 0L
+    }
+
     fun updatePermissionStatus(isGranted: Boolean) {
         _isPermissionGranted.value = isGranted
         if (!isGranted) {
@@ -45,6 +126,7 @@ class CameraViewModel : ViewModel() {
 
     fun toggleCameraFacing() {
         _isFrontCamera.value = !_isFrontCamera.value
+        smoothedFaces.clear()
     }
 
     fun toggleMaskEnabled() {
@@ -106,7 +188,10 @@ class CameraViewModel : ViewModel() {
 
     /**
      * Processes detected ML Kit faces by transforming landmark and bounding box coordinates
-     * through the unified transformation pipeline.
+     * through the unified transformation pipeline, then applies per-face exponential smoothing
+     * (keyed by ML Kit's tracking ID) to remove frame-to-frame jitter in the live mask overlay,
+     * and briefly holds a face's last known position through momentary detection dropouts
+     * (blinks, quick head turns) instead of letting the mask flicker off for a single missed frame.
      */
     fun processDetectedFaces(
         faces: List<Face>,
@@ -122,7 +207,11 @@ class CameraViewModel : ViewModel() {
             return
         }
 
-        val transformedList = faces.map { face ->
+        val now = System.currentTimeMillis()
+        val seenIds = mutableSetOf<Int>()
+        val transformedList = mutableListOf<TransformedFaceData>()
+
+        for (face in faces) {
             val rawBox = face.boundingBox
 
             // Transform bounding box corners through the exact same pipeline
@@ -165,22 +254,61 @@ class CameraViewModel : ViewModel() {
                 screenLeftEye to screenRightEye
             }
 
+            val trackingId = face.trackingId
+            val result = if (trackingId == null) {
+                // No stable identity available (tracking disabled or lost) -- pass through raw.
+                TransformedFaceData(boxRect, finalLeftEye, finalRightEye)
+            } else {
+                seenIds += trackingId
+                val prior = smoothedFaces[trackingId]
+                val smoothedBox = if (prior == null) boxRect else lerpRect(prior.boundingBox, boxRect, SMOOTHING_FACTOR)
+                val smoothedLeftEye = lerpPoint(prior?.leftEye, finalLeftEye, SMOOTHING_FACTOR)
+                val smoothedRightEye = lerpPoint(prior?.rightEye, finalRightEye, SMOOTHING_FACTOR)
+                smoothedFaces[trackingId] = SmoothedFaceState(smoothedBox, smoothedLeftEye, smoothedRightEye, now)
+                TransformedFaceData(smoothedBox, smoothedLeftEye, smoothedRightEye)
+            }
+
+            transformedList.add(result)
+
             Log.d(
                 "FaceTransform",
-                "rotation=$rotationDegrees, img=${imageWidth}x${imageHeight}, prev=${previewWidth}x${previewHeight} | " +
-                        "rawL=$rawLeftEye, rawR=$rawRightEye | finalL=$finalLeftEye, finalR=$finalRightEye"
-            )
-
-            TransformedFaceData(
-                boundingBox = boxRect,
-                leftEye = finalLeftEye,
-                rightEye = finalRightEye
+                "rotation=$rotationDegrees, img=${imageWidth}x${imageHeight}, prev=${previewWidth}x${previewHeight}, " +
+                        "trackingId=$trackingId | rawL=$rawLeftEye, rawR=$rawRightEye | finalL=$finalLeftEye, finalR=$finalRightEye"
             )
         }
 
+        // Grace period: keep a briefly-missed tracked face's last known position alive for a
+        // short window so the mask doesn't flicker off for a single dropped detection frame.
+        smoothedFaces.forEach { (id, state) ->
+            if (id !in seenIds && now - state.lastSeenAtMs < STALE_FACE_TIMEOUT_MS) {
+                transformedList.add(TransformedFaceData(state.boundingBox, state.leftEye, state.rightEye))
+            }
+        }
+        smoothedFaces.keys.retainAll { id -> now - (smoothedFaces[id]?.lastSeenAtMs ?: 0L) < STALE_FACE_TIMEOUT_MS }
+
         _detectedFaces.value = transformedList
     }
+
+    private companion object {
+        /** Weight given to each new sample; lower = smoother but more lag. */
+        const val SMOOTHING_FACTOR = 0.35f
+
+        /** How long to keep showing a tracked face's last known position after it briefly drops out. */
+        const val STALE_FACE_TIMEOUT_MS = 250L
+
+        fun lerp(a: Float, b: Float, t: Float): Float = a + (b - a) * t
+
+        fun lerpPoint(from: PointF?, to: PointF?, t: Float): PointF? {
+            if (to == null) return null
+            if (from == null) return to
+            return PointF(lerp(from.x, to.x, t), lerp(from.y, to.y, t))
+        }
+
+        fun lerpRect(from: RectF, to: RectF, t: Float): RectF = RectF(
+            lerp(from.left, to.left, t),
+            lerp(from.top, to.top, t),
+            lerp(from.right, to.right, t),
+            lerp(from.bottom, to.bottom, t)
+        )
+    }
 }
-
-
-

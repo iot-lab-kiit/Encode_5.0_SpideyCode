@@ -1,0 +1,8 @@
+{
+  "displayName": "Spider-Verse",
+  "outputAsset": "images/frame_spidergirl.png",
+  "window": { "left": 0.24, "top": 0.24, "width": 0.52444, "height": 0.31 },
+  "stickers": [
+    { "file": "sticker_1.png", "x": 0.26, "y": 0.24, "width": 0.34, "yMode": "Top", "binarize": true }
+  ]
+}

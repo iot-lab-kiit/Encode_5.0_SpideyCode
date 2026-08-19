@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
@@ -17,13 +18,26 @@ import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
+import androidx.camera.core.UseCase
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.video.FileOutputOptions
+import androidx.camera.video.Quality
+import androidx.camera.video.QualitySelector
+import androidx.camera.video.Recorder
+import androidx.camera.video.Recording
+import androidx.camera.video.VideoCapture
+import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -37,7 +51,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -46,15 +62,24 @@ import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import `in`.iot.spidey_code.data.model.FilterType
 import `in`.iot.spidey_code.data.model.NormalizedRect
+import `in`.iot.spidey_code.data.model.badgeCorner
 import `in`.iot.spidey_code.data.model.displayName
 import `in`.iot.spidey_code.data.model.frameDefinition
+import `in`.iot.spidey_code.data.model.showBrandingOverlay
 import `in`.iot.spidey_code.utils.FrameWindowDetector
 import `in`.iot.spidey_code.utils.ImageCompositionUtils
+import `in`.iot.spidey_code.utils.VideoCompositionUtils
 import `in`.iot.spidey_code.view.components.CameraControls
 import `in`.iot.spidey_code.view.components.CameraTopBar
 import `in`.iot.spidey_code.view.components.CameraViewport
+import `in`.iot.spidey_code.view.components.FilterCarousel
 import `in`.iot.spidey_code.vm.CameraViewModel
+import `in`.iot.spidey_code.vm.FlashMode
+import java.io.File
 import java.util.concurrent.Executors
+
+/** Max length of a held-to-record clip, matching a short social-video style limit. */
+private const val MAX_RECORDING_MS = 15_000L
 
 /**
  * Screen orchestrator for camera view, handling camera permission lifecycle,
@@ -64,6 +89,7 @@ import java.util.concurrent.Executors
 fun CameraScreen(
     selectedFilter: FilterType,
     onNavigateToReview: (FilterType, String) -> Unit,
+    onNavigateToVideoReview: (FilterType, String) -> Unit,
     onNavigateBack: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: CameraViewModel = viewModel()
@@ -74,12 +100,20 @@ fun CameraScreen(
     val detectedFaces by viewModel.detectedFaces.collectAsState()
     val isFrontCamera by viewModel.isFrontCamera.collectAsState()
     val isMaskEnabled by viewModel.isMaskEnabled.collectAsState()
+    val flashMode by viewModel.flashMode.collectAsState()
+    val isRecording by viewModel.isRecording.collectAsState()
+    val recordingElapsedMs by viewModel.recordingElapsedMs.collectAsState()
+
+    // Live-selected filter, switchable in-camera via the filter carousel below.
+    // Seeded once from the Gear Selection nav argument, then owned by the ViewModel.
+    LaunchedEffect(Unit) { viewModel.initializeFilter(selectedFilter) }
+    val activeFilter by viewModel.selectedFilter.collectAsState()
 
     var isCapturing by remember { mutableStateOf(false) }
 
-    val frameDefinition = selectedFilter.frameDefinition
+    val frameDefinition = activeFilter.frameDefinition
 
-    val frameImageBitmap = remember(context, selectedFilter) {
+    val frameImageBitmap = remember(context, activeFilter) {
         frameDefinition?.assetPath?.let { assetPath ->
             runCatching {
                 context.assets.open(assetPath).use { inputStream ->
@@ -117,11 +151,35 @@ fun CameraScreen(
             .build()
     }
 
+    // Auto-stop at the max clip duration, same cap the recording ring animates toward.
+    LaunchedEffect(recordingElapsedMs) {
+        if (isRecording && recordingElapsedMs >= MAX_RECORDING_MS) {
+            viewModel.stopRecordingTimer()
+        }
+    }
+
+    val recorder = remember {
+        Recorder.Builder()
+            .setQualitySelector(QualitySelector.from(Quality.HD))
+            .build()
+    }
+    val videoCapture = remember { VideoCapture.withOutput(recorder) }
+    var activeRecording by remember { mutableStateOf<Recording?>(null) }
+    var isProcessingVideo by remember { mutableStateOf(false) }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         viewModel.updatePermissionStatus(isGranted)
     }
+
+    val audioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { /* Video still works without audio if this is denied -- just recorded muted. */ }
+
+    val storagePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { /* Pre-API 29 only; see the WRITE_EXTERNAL_STORAGE check below. */ }
 
     LaunchedEffect(Unit) {
         val checkPermission = ContextCompat.checkSelfPermission(
@@ -134,6 +192,79 @@ fun CameraScreen(
         if (!checkPermission) {
             permissionLauncher.launch(Manifest.permission.CAMERA)
         }
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+        // Scoped storage (and the MediaStore-without-permission exemption for an app's own
+        // files) only exists from API 29 onward -- below that, inserting into MediaStore.Video
+        // needs this runtime permission or the insert silently fails.
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+        ) {
+            storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
+    }
+
+    // Keep capture flash mode in sync with the toggle in the top bar.
+    LaunchedEffect(flashMode) {
+        imageCapture.flashMode = when (flashMode) {
+            FlashMode.OFF -> ImageCapture.FLASH_MODE_OFF
+            FlashMode.AUTO -> ImageCapture.FLASH_MODE_AUTO
+            FlashMode.ON -> ImageCapture.FLASH_MODE_ON
+        }
+    }
+
+    fun startRecording() {
+        if (activeRecording != null) return
+
+        // Record to a temp cache file first (not straight to the gallery) so the frame
+        // decoration can be baked in and the user can review before it's saved anywhere
+        // permanent -- same pattern as photos.
+        val rawVideoFile = File(context.cacheDir, "raw_spidey_video_${System.currentTimeMillis()}.mp4")
+        val outputOptions = FileOutputOptions.Builder(rawVideoFile).build()
+
+        val hasAudioPermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+
+        val pending = videoCapture.output.prepareRecording(context, outputOptions).let {
+            if (hasAudioPermission) it.withAudioEnabled() else it
+        }
+
+        val filterSnapshot = activeFilter
+        viewModel.startRecordingTimer()
+        activeRecording = pending.start(ContextCompat.getMainExecutor(context)) { event ->
+            if (event is VideoRecordEvent.Finalize) {
+                activeRecording = null
+                viewModel.stopRecordingTimer()
+                if (event.hasError()) {
+                    Toast.makeText(context, "Recording failed: ${event.cause?.message}", Toast.LENGTH_SHORT).show()
+                    return@start
+                }
+
+                isProcessingVideo = true
+                val framedVideoFile = File(context.cacheDir, "framed_spidey_video_${System.currentTimeMillis()}.mp4")
+                VideoCompositionUtils.composeVideoWithFrame(
+                    context = context,
+                    rawVideoFile = rawVideoFile,
+                    selectedFilter = filterSnapshot,
+                    outputFile = framedVideoFile
+                ) { composedFile ->
+                    isProcessingVideo = false
+                    rawVideoFile.delete()
+                    if (composedFile != null) {
+                        onNavigateToVideoReview(filterSnapshot, Uri.fromFile(composedFile).toString())
+                    } else {
+                        Toast.makeText(context, "Couldn't process video", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+    }
+
+    fun stopRecording() {
+        activeRecording?.stop()
     }
 
     // CameraX + ML Kit Face Detection Lifecycle Binding (re-binds cleanly when camera facing changes)
@@ -144,9 +275,10 @@ fun CameraScreen(
         val cameraExecutor = Executors.newSingleThreadExecutor()
 
         val detectorOptions = FaceDetectorOptions.Builder()
-            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
+            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
             .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
             .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
+            .enableTracking()
             .build()
 
         val faceDetector = FaceDetection.getClient(detectorOptions)
@@ -199,13 +331,33 @@ fun CameraScreen(
                 }
 
                 cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(
-                    lifecycleOwner,
-                    cameraSelector,
-                    preview,
-                    imageAnalysis,
-                    imageCapture
-                )
+
+                // Not every device's camera hardware level guarantees four concurrent streams
+                // (Preview + ImageAnalysis + ImageCapture + VideoCapture). Try the full set
+                // first; if the device can't support it, degrade gracefully rather than losing
+                // the whole camera screen -- first dropping face analysis (mask stops working,
+                // photo/video still do), then dropping video entirely as a last resort.
+                val fullUseCases = arrayOf<UseCase>(preview, imageAnalysis, imageCapture, videoCapture)
+                val noAnalysisUseCases = arrayOf<UseCase>(preview, imageCapture, videoCapture)
+                val noVideoUseCases = arrayOf<UseCase>(preview, imageAnalysis, imageCapture)
+
+                val attempts = listOf(fullUseCases, noAnalysisUseCases, noVideoUseCases)
+                var bound = false
+                for (useCases in attempts) {
+                    try {
+                        cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, *useCases)
+                        bound = true
+                        break
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+                if (!bound) {
+                    // Absolute fallback: preview + photo only.
+                    runCatching {
+                        cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, imageCapture)
+                    }
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -232,7 +384,8 @@ fun CameraScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            // 1. Main Frame Poster Viewport (occupies top area)
+            // 1. Main Frame Poster Viewport (occupies top area). Double-tap flips the
+            // camera, mirroring the common gesture shortcut alongside the explicit button.
             CameraViewport(
                 isPermissionGranted = isPermissionGranted,
                 previewView = previewView,
@@ -240,19 +393,44 @@ fun CameraScreen(
                 isMaskEnabled = isMaskEnabled,
                 frameImageBitmap = frameImageBitmap,
                 normalizedWindow = normalizedWindow,
+                badgeCorner = activeFilter.badgeCorner,
+                showBrandingOverlay = activeFilter.showBrandingOverlay,
                 onRequestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .pointerInput(isRecording) {
+                        if (isRecording) return@pointerInput
+                        detectTapGestures(onDoubleTap = { viewModel.toggleCameraFacing() })
+                    }
+            )
+
+            // 1b. Snapchat-style filter carousel: swipe or tap to switch the live frame
+            // without leaving the camera screen.
+            FilterCarousel(
+                filters = remember { FilterType.entries.toList() },
+                selectedFilter = activeFilter,
+                onFilterSelected = { viewModel.selectFilter(it) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.95f))
+                    .padding(vertical = 8.dp)
             )
 
             // 2. Compact Bottom Control Bar
             CameraControls(
                 isMaskEnabled = isMaskEnabled,
                 isCapturing = isCapturing,
+                isRecording = isRecording,
+                recordingProgress = (recordingElapsedMs.toFloat() / MAX_RECORDING_MS).coerceIn(0f, 1f),
+                recordingLabel = "%d:%02d".format((recordingElapsedMs / 1000) / 60, (recordingElapsedMs / 1000) % 60),
                 onToggleMask = { viewModel.toggleMaskEnabled() },
-                onShutterClick = {
+                onStartRecording = { startRecording() },
+                onStopRecording = { stopRecording() },
+                onTapPhoto = {
                     isCapturing = true
                     val facesSnapshot = detectedFaces.toList()
                     val isMaskEnabledSnapshot = isMaskEnabled
+                    val filterSnapshot = activeFilter
                     val cameraExecutor = Executors.newSingleThreadExecutor()
 
                     imageCapture.takePicture(
@@ -283,7 +461,7 @@ fun CameraScreen(
                                 val photoFile = ImageCompositionUtils.createComposedPoster(
                                     context = context,
                                     rotatedBitmap = rotatedBitmap,
-                                    selectedFilter = selectedFilter,
+                                    selectedFilter = filterSnapshot,
                                     isMaskEnabled = isMaskEnabledSnapshot,
                                     facesSnapshot = facesSnapshot,
                                     previewWidth = previewView.width.toFloat(),
@@ -296,7 +474,7 @@ fun CameraScreen(
                                     isCapturing = false
                                     if (photoFile != null && photoFile.exists() && photoFile.length() > 0) {
                                         val fileUri = Uri.fromFile(photoFile).toString()
-                                        onNavigateToReview(selectedFilter, fileUri)
+                                        onNavigateToReview(filterSnapshot, fileUri)
                                     }
                                 }
                             }
@@ -317,9 +495,31 @@ fun CameraScreen(
 
         // TOPMOST Compose Layer: Floating Islands Top Control Bar
         CameraTopBar(
-            filterName = selectedFilter.displayName(),
+            filterName = activeFilter.displayName(),
+            flashMode = flashMode,
             onBack = onNavigateBack,
+            onCycleFlash = { viewModel.cycleFlashMode() },
             modifier = Modifier.align(Alignment.TopCenter)
         )
+
+        // Baking the frame into the recorded clip takes a few seconds -- block input with a
+        // clear "processing" state rather than leaving the screen looking stuck.
+        if (isProcessingVideo) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.75f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = Color.White)
+                    Text(
+                        text = "Adding your frame...",
+                        color = Color.White,
+                        modifier = Modifier.padding(top = 16.dp)
+                    )
+                }
+            }
+        }
     }
 }
