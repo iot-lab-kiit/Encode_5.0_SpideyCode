@@ -1,0 +1,8 @@
+{
+  "displayName": "Web Shooter",
+  "outputAsset": "images/frame_readymade.png",
+  "window": { "left": 0.13542, "top": 0.21094, "width": 0.72396, "height": 0.42188 },
+  "stickers": [
+    { "file": "sticker_1.png", "x": 0.14, "y": 0.21, "width": 0.32, "yMode": "Top" }
+  ]
+}

@@ -19,9 +19,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Celebration
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.FlashOn
-import androidx.compose.material.icons.filled.VideocamOff
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Nightlight
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -80,7 +83,10 @@ fun FilterCard(
         FilterType.CLASSIC_MASK -> Icons.Default.Face
         FilterType.WEB_SHOOTER -> Icons.Default.Visibility
         FilterType.SPIDEY_SENSE -> Icons.Default.FlashOn
-        FilterType.NONE -> Icons.Default.VideocamOff
+        FilterType.SPIDER_VERSE -> Icons.Default.AutoAwesome
+        FilterType.EVENT_SQUAD -> Icons.Default.Groups
+        FilterType.SPIDEY_PARTY -> Icons.Default.Celebration
+        FilterType.GHOST_SPIDER -> Icons.Default.Nightlight
     }
 
     val innerBgColor = previewBackgroundColor ?: if (isSelected) {

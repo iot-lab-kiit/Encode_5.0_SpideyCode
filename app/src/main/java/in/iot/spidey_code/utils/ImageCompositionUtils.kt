@@ -4,12 +4,18 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Rect
+import android.graphics.RectF
 import android.util.Log
+import `in`.iot.spidey_code.data.model.BadgeCorner
 import `in`.iot.spidey_code.data.model.FilterType
 import `in`.iot.spidey_code.data.model.NormalizedRect
+import `in`.iot.spidey_code.data.model.badgeCorner
 import `in`.iot.spidey_code.data.model.frameAssetPath
 import `in`.iot.spidey_code.data.model.frameDefinition
+import `in`.iot.spidey_code.data.model.showBrandingOverlay
 import `in`.iot.spidey_code.view.components.SpideyMaskReference
 import `in`.iot.spidey_code.vm.TransformedFaceData
 import java.io.File
@@ -151,6 +157,14 @@ object ImageCompositionUtils {
 
             // 3. Draw rawFrameBitmap (frame poster) over full composite
             canvas.drawBitmap(rawFrameBitmap, 0f, 0f, null)
+
+            // 4. Draw the shared branding overlay (corner logos + event badge) on top of
+            // every filter -- except Classic, whose own frame art already has full
+            // branding baked in (see FilterType.showBrandingOverlay).
+            if (selectedFilter.showBrandingOverlay) {
+                drawBrandingOverlay(context, canvas, frameW, frameH, windowRect, selectedFilter.badgeCorner)
+            }
+
             composite
         } else {
             rotatedBitmap
@@ -170,5 +184,82 @@ object ImageCompositionUtils {
             e.printStackTrace()
             null
         }
+    }
+
+    private val CORNER_LOGO_ASSETS = listOf(
+        "logos/algozenith_logo.png",
+        "logos/iot_logo.png",
+        "logos/ksac_logo.webp"
+    )
+    private const val EVENT_BADGE_ASSET = "logos/encodexzenith_logo.png"
+
+    /**
+     * Draws the shared branding layer on top of the fully composed frame: a small row of
+     * society logos in the top-right corner, and the event badge straddling one bottom
+     * corner of the photo window (half over the photo, half over the frame border). Mirrors
+     * BrandingOverlay's exact math so the final photo matches what the live preview showed.
+     */
+    private fun drawBrandingOverlay(
+        context: Context,
+        canvas: Canvas,
+        frameW: Int,
+        frameH: Int,
+        windowRect: Rect,
+        badgeCorner: BadgeCorner
+    ) {
+        val config = BrandingConfig.load(context)
+        val logoSize = frameW * config.logoSizeRatio
+        val logoGap = frameW * config.logoGapRatio
+        val marginTop = frameH * config.logoMarginTopRatio
+        val marginEnd = frameW * config.logoMarginEndRatio
+        val totalWidth = CORNER_LOGO_ASSETS.size * logoSize + (CORNER_LOGO_ASSETS.size - 1) * logoGap
+
+        var x = frameW - marginEnd - totalWidth
+        for (path in CORNER_LOGO_ASSETS) {
+            val logoBitmap = decodeAssetBitmap(context, path)
+            if (logoBitmap != null) {
+                drawCircularBitmap(canvas, logoBitmap, RectF(x, marginTop, x + logoSize, marginTop + logoSize))
+            }
+            x += logoSize + logoGap
+        }
+
+        val badgeBitmap = decodeAssetBitmap(context, EVENT_BADGE_ASSET)
+        if (badgeBitmap != null) {
+            val badgeWidth = frameW * config.badgeWidthRatio
+            val aspect = badgeBitmap.width.toFloat() / badgeBitmap.height.toFloat()
+            val badgeHeight = badgeWidth / aspect
+
+            val cornerX = if (badgeCorner == BadgeCorner.RIGHT) windowRect.right.toFloat() else windowRect.left.toFloat()
+            val cornerY = windowRect.bottom.toFloat()
+            val offsetX = if (badgeCorner == BadgeCorner.RIGHT) {
+                cornerX - badgeWidth * config.badgeInsetRatio
+            } else {
+                cornerX - badgeWidth * (1f - config.badgeInsetRatio)
+            }
+            val offsetY = cornerY - badgeHeight * 0.5f
+
+            canvas.drawBitmap(badgeBitmap, null, RectF(offsetX, offsetY, offsetX + badgeWidth, offsetY + badgeHeight), null)
+        }
+    }
+
+    private fun drawCircularBitmap(canvas: Canvas, bitmap: Bitmap, destRect: RectF) {
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        canvas.save()
+        val clipPath = Path().apply { addOval(destRect, Path.Direction.CW) }
+        canvas.clipPath(clipPath)
+        canvas.drawBitmap(bitmap, null, destRect, paint)
+        canvas.restore()
+    }
+
+    private fun decodeAssetBitmap(context: Context, path: String): Bitmap? {
+        return runCatching {
+            context.assets.open(path).use { input ->
+                val options = BitmapFactory.Options().apply {
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                    inPremultiplied = true
+                }
+                BitmapFactory.decodeStream(input, null, options)
+            }
+        }.getOrNull()
     }
 }
