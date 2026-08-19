@@ -17,13 +17,27 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Nearly every phone since ~2017 is arm64. Shipping x86_64/x86/armeabi-v7a
+        // native libs too (CameraX, ML Kit, Media3) quadruples lib/ for zero benefit
+        // on a real device -- ~24MB of dead weight. Trade-off: this APK won't install
+        // on x86 emulators or old 32-bit-only devices; fine for installing directly on
+        // known event-booth phones, not for wide public distribution via Play Store
+        // (which would use App Bundles + per-device delivery instead of this filter).
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
     }
 
     buildTypes {
         release {
             optimization {
-                enable = false
+                enable = true
             }
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
     compileOptions {
