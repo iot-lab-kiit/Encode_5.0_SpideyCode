@@ -171,7 +171,7 @@ fun GearSelectionScreen(
 
             ContinueButton(
                 text = "CONTINUE TO CAMERA",
-                onClick = { onNavigateToCamera(FilterType.CLASSIC_MASK) }
+                onClick = { onNavigateToCamera(selectedFilter) }
             )
         }
 

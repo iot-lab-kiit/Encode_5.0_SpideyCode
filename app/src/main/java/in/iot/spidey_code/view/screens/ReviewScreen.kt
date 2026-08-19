@@ -2,6 +2,8 @@ package `in`.iot.spidey_code.view.screens
 
 import android.graphics.BitmapFactory
 import android.net.Uri
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,6 +25,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
@@ -122,12 +126,29 @@ fun ReviewScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
                 contentAlignment = Alignment.Center
             ) {
+                val isReady = capturedBitmap != null
+                val previewAlpha by animateFloatAsState(
+                    targetValue = if (isReady) 1f else 0f,
+                    animationSpec = tween(320),
+                    label = "previewAlpha"
+                )
+                val previewScale by animateFloatAsState(
+                    targetValue = if (isReady) 1f else 0.92f,
+                    animationSpec = tween(320),
+                    label = "previewScale"
+                )
+
                 CapturedImagePreviewCard(
                     capturedBitmap = capturedBitmap,
-                    imageUri = imageUri
+                    imageUri = imageUri,
+                    modifier = Modifier.graphicsLayer {
+                        alpha = if (isReady) previewAlpha else 1f
+                        scaleX = if (isReady) previewScale else 1f
+                        scaleY = if (isReady) previewScale else 1f
+                    }
                 )
             }
 
