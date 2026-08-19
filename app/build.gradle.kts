@@ -31,8 +31,15 @@ android {
 
     buildTypes {
         release {
+            // NOTE: R8 shrinking was briefly enabled to cut APK size, but it broke the
+            // camera screen at runtime -- a DisposableEffect teardown lambda in
+            // CameraScreen.kt started crashing with an NPE right when camera permission
+            // is granted (only reproduces in the minified build; traced via the R8
+            // mapping file, not yet root-caused to a specific fix). Reverted to keep the
+            // app working; re-enabling this needs on-device testing time this isn't safe
+            // to ship without. See proguard-rules.pro for where keep rules would go.
             optimization {
-                enable = true
+                enable = false
             }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
