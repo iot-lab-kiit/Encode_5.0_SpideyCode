@@ -29,6 +29,15 @@ import kotlin.math.atan2
 object ImageCompositionUtils {
 
     /**
+     * Bilinear-filtered, anti-aliased, dithered -- used for every scaled drawBitmap call in this
+     * file (photo crop-into-window, mask, logos, badge). Without FILTER_BITMAP_FLAG, Android
+     * falls back to nearest-neighbor sampling when a bitmap is drawn at a different size than its
+     * source, which is the main cause of the composited photo looking soft/blocky compared to
+     * the raw camera capture.
+     */
+    private val HIGH_QUALITY_PAINT = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
+
+    /**
      * Composites captured photo, face mask (if enabled), and selected frame overlay into a single
      * high-resolution poster bitmap matching the native frame asset resolution.
      */
@@ -84,9 +93,9 @@ object ImageCompositionUtils {
                     Rect(0, top, photoW.toInt(), top + cropH)
                 }
 
-                canvas.drawBitmap(rotatedBitmap, srcRect, windowRect, null)
+                canvas.drawBitmap(rotatedBitmap, srcRect, windowRect, HIGH_QUALITY_PAINT)
             } else {
-                canvas.drawBitmap(rotatedBitmap, null, windowRect, null)
+                canvas.drawBitmap(rotatedBitmap, null, windowRect, HIGH_QUALITY_PAINT)
             }
 
             // 2. Draw Face Mask onto captured photo using shutter snapshot if mask toggle was ON & faces detected
@@ -132,7 +141,7 @@ object ImageCompositionUtils {
                             maskBitmap,
                             -SpideyMaskReference.maskEyeCenter.x,
                             -SpideyMaskReference.maskEyeCenter.y,
-                            null
+                            HIGH_QUALITY_PAINT
                         )
                         canvas.restore()
                     }
@@ -140,7 +149,7 @@ object ImageCompositionUtils {
             }
 
             // 3. Draw rawFrameBitmap (frame poster) over full composite
-            canvas.drawBitmap(rawFrameBitmap, 0f, 0f, null)
+            canvas.drawBitmap(rawFrameBitmap, 0f, 0f, HIGH_QUALITY_PAINT)
 
             // 4. Draw the shared branding overlay (corner logos + event badge) on top of
             // every filter -- except Classic, whose own frame art already has full
@@ -161,7 +170,7 @@ object ImageCompositionUtils {
 
         return try {
             FileOutputStream(photoFile).use { out ->
-                finalBitmap.compress(Bitmap.CompressFormat.JPEG, 92, out)
+                finalBitmap.compress(Bitmap.CompressFormat.JPEG, 96, out)
             }
             if (photoFile.exists() && photoFile.length() > 0) photoFile else null
         } catch (e: Exception) {
@@ -186,7 +195,7 @@ object ImageCompositionUtils {
 
         val composite = Bitmap.createBitmap(frameW, frameH, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(composite)
-        canvas.drawBitmap(rawFrameBitmap, 0f, 0f, null)
+        canvas.drawBitmap(rawFrameBitmap, 0f, 0f, HIGH_QUALITY_PAINT)
 
         if (selectedFilter.showBrandingOverlay) {
             drawBrandingOverlay(context, canvas, frameW, frameH, windowRect, selectedFilter.badgeCorner)
@@ -268,12 +277,12 @@ object ImageCompositionUtils {
             }
             val offsetY = cornerY - badgeHeight * 0.5f
 
-            canvas.drawBitmap(badgeBitmap, null, RectF(offsetX, offsetY, offsetX + badgeWidth, offsetY + badgeHeight), null)
+            canvas.drawBitmap(badgeBitmap, null, RectF(offsetX, offsetY, offsetX + badgeWidth, offsetY + badgeHeight), HIGH_QUALITY_PAINT)
         }
     }
 
     private fun drawCircularBitmap(canvas: Canvas, bitmap: Bitmap, destRect: RectF) {
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        val paint = HIGH_QUALITY_PAINT
         canvas.save()
         val clipPath = Path().apply { addOval(destRect, Path.Direction.CW) }
         canvas.clipPath(clipPath)
