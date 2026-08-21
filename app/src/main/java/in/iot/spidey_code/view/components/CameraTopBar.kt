@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FlashAuto
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
@@ -31,7 +30,6 @@ import `in`.iot.spidey_code.vm.FlashMode
 fun CameraTopBar(
     filterName: String,
     flashMode: FlashMode,
-    onBack: () -> Unit,
     onCycleFlash: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -44,30 +42,6 @@ fun CameraTopBar(
             .statusBarsPadding()
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        // Floating Rounded-Square Back Button (Top-Left)
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .size(40.dp)
-                .background(
-                    color = darkTranslucentBg,
-                    shape = RoundedCornerShape(12.dp)
-                )
-                .border(
-                    width = 1.dp,
-                    color = subtleBorderColor,
-                    shape = RoundedCornerShape(12.dp)
-                )
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back",
-                tint = Color.White,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-
         // Floating Centered Mode Indicator Pill (Truly Centered)
         Surface(
             modifier = Modifier.align(Alignment.Center),

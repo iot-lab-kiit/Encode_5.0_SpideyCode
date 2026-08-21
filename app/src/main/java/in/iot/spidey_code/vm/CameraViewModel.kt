@@ -25,6 +25,11 @@ data class TransformedFaceData(
     val rightEye: PointF? = null
 )
 
+data class TimestampedFaceFrame(
+    val timestampUs: Long,
+    val faces: List<TransformedFaceData>
+)
+
 /** Capture flash mode, independent of any CameraX type so the ViewModel stays framework-free. */
 enum class FlashMode {
     OFF, AUTO, ON;
@@ -64,7 +69,7 @@ class CameraViewModel : ViewModel() {
     val flashMode: StateFlow<FlashMode> = _flashMode.asStateFlow()
 
     // Live-selected filter/frame, switchable in-camera via the Snapchat-style filter
-    // carousel without leaving the screen. Seeded once from the Gear Selection nav
+    // carousel without leaving the screen. Seeded once from the initial nav
     // argument (see initializeFilter), then owned entirely by this ViewModel.
     private val _selectedFilter = MutableStateFlow(FilterType.CLASSIC_MASK)
     val selectedFilter: StateFlow<FilterType> = _selectedFilter.asStateFlow()
@@ -78,6 +83,8 @@ class CameraViewModel : ViewModel() {
     val recordingElapsedMs: StateFlow<Long> = _recordingElapsedMs.asStateFlow()
 
     private var recordingTimerJob: Job? = null
+    private var recordingStartNanoTime: Long = 0L
+    private val _recordedFaceTimeline = mutableListOf<TimestampedFaceFrame>()
 
     // Per-tracked-face smoothing state for the live mask overlay (see processDetectedFaces).
     private val smoothedFaces = mutableMapOf<Int, SmoothedFaceState>()
@@ -100,6 +107,11 @@ class CameraViewModel : ViewModel() {
     fun startRecordingTimer() {
         _isRecording.value = true
         _recordingElapsedMs.value = 0L
+        recordingStartNanoTime = System.nanoTime()
+        synchronized(_recordedFaceTimeline) {
+            _recordedFaceTimeline.clear()
+            _recordedFaceTimeline.add(TimestampedFaceFrame(0L, _detectedFaces.value))
+        }
         recordingTimerJob?.cancel()
         recordingTimerJob = viewModelScope.launch {
             val startTime = System.currentTimeMillis()
@@ -115,6 +127,18 @@ class CameraViewModel : ViewModel() {
         recordingTimerJob?.cancel()
         recordingTimerJob = null
         _recordingElapsedMs.value = 0L
+        if (recordingStartNanoTime > 0L) {
+            val finalUs = (System.nanoTime() - recordingStartNanoTime) / 1000L
+            synchronized(_recordedFaceTimeline) {
+                _recordedFaceTimeline.add(TimestampedFaceFrame(finalUs, _detectedFaces.value))
+            }
+        }
+    }
+
+    fun getRecordedFaceTimeline(): List<TimestampedFaceFrame> {
+        return synchronized(_recordedFaceTimeline) {
+            _recordedFaceTimeline.toList()
+        }
     }
 
     fun updatePermissionStatus(isGranted: Boolean) {
@@ -287,6 +311,13 @@ class CameraViewModel : ViewModel() {
         smoothedFaces.keys.retainAll { id -> now - (smoothedFaces[id]?.lastSeenAtMs ?: 0L) < STALE_FACE_TIMEOUT_MS }
 
         _detectedFaces.value = transformedList
+
+        if (_isRecording.value && recordingStartNanoTime > 0L) {
+            val elapsedUs = (System.nanoTime() - recordingStartNanoTime) / 1000L
+            synchronized(_recordedFaceTimeline) {
+                _recordedFaceTimeline.add(TimestampedFaceFrame(elapsedUs, transformedList))
+            }
+        }
     }
 
     private companion object {

@@ -43,7 +43,7 @@ import java.io.File
 fun VideoReviewScreen(
     selectedFilter: FilterType,
     videoUri: String?,
-    onNavigateToGearSelection: () -> Unit,
+    onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -81,7 +81,7 @@ fun VideoReviewScreen(
                 }
             }
         }
-        onNavigateToGearSelection()
+        onNavigateBack()
     }
 
     Box(

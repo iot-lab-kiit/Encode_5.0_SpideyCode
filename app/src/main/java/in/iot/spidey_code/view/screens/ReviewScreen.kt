@@ -44,7 +44,7 @@ import java.io.File
 fun ReviewScreen(
     selectedFilter: FilterType,
     imageUri: String?,
-    onNavigateToGearSelection: () -> Unit,
+    onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -78,7 +78,7 @@ fun ReviewScreen(
                 }
             }
         }
-        onNavigateToGearSelection()
+        onNavigateBack()
     }
 
     Box(
@@ -186,6 +186,6 @@ fun ReviewScreenPreview() {
     ReviewScreen(
         selectedFilter = FilterType.CLASSIC_MASK,
         imageUri = null,
-        onNavigateToGearSelection = {}
+        onNavigateBack = {}
     )
 }

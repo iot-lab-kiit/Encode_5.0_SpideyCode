@@ -11,19 +11,17 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import `in`.iot.spidey_code.data.model.FilterType
 import `in`.iot.spidey_code.view.screens.CameraScreen
-import `in`.iot.spidey_code.view.screens.GearSelectionScreen
 import `in`.iot.spidey_code.view.screens.ReviewScreen
 import `in`.iot.spidey_code.view.screens.SplashScreen
 import `in`.iot.spidey_code.view.screens.VideoReviewScreen
 
 object Routes {
     const val SPLASH = "splash"
-    const val GEAR_SELECTION = "gear_selection"
     const val CAMERA = "camera/{filterType}"
     const val REVIEW = "review/{filterType}?imageUri={imageUri}"
     const val VIDEO_REVIEW = "video_review/{filterType}?videoUri={videoUri}"
 
-    fun createCameraRoute(filterType: FilterType): String = "camera/${filterType.name}"
+    fun createCameraRoute(filterType: FilterType = FilterType.CLASSIC_MASK): String = "camera/${filterType.name}"
     fun createReviewRoute(filterType: FilterType, imageUri: String): String =
         "review/${filterType.name}?imageUri=${Uri.encode(imageUri)}"
     fun createVideoReviewRoute(filterType: FilterType, videoUri: String): String =
@@ -43,17 +41,9 @@ fun AppNavigation(
         composable(route = Routes.SPLASH) {
             SplashScreen(
                 onSplashFinished = {
-                    navController.navigate(Routes.GEAR_SELECTION) {
+                    navController.navigate(Routes.createCameraRoute(FilterType.CLASSIC_MASK)) {
                         popUpTo(Routes.SPLASH) { inclusive = true }
                     }
-                }
-            )
-        }
-
-        composable(route = Routes.GEAR_SELECTION) {
-            GearSelectionScreen(
-                onNavigateToCamera = { selectedFilter ->
-                    navController.navigate(Routes.createCameraRoute(selectedFilter))
                 }
             )
         }
@@ -79,9 +69,6 @@ fun AppNavigation(
                 },
                 onNavigateToVideoReview = { selectedFilter, videoUri ->
                     navController.navigate(Routes.createVideoReviewRoute(selectedFilter, videoUri))
-                },
-                onNavigateBack = {
-                    navController.popBackStack()
                 }
             )
         }
@@ -109,10 +96,8 @@ fun AppNavigation(
             ReviewScreen(
                 selectedFilter = filterType,
                 imageUri = imageUri,
-                onNavigateToGearSelection = {
-                    navController.navigate(Routes.GEAR_SELECTION) {
-                        popUpTo(Routes.GEAR_SELECTION) { inclusive = true }
-                    }
+                onNavigateBack = {
+                    navController.popBackStack()
                 }
             )
         }
@@ -140,10 +125,8 @@ fun AppNavigation(
             VideoReviewScreen(
                 selectedFilter = filterType,
                 videoUri = videoUri,
-                onNavigateToGearSelection = {
-                    navController.navigate(Routes.GEAR_SELECTION) {
-                        popUpTo(Routes.GEAR_SELECTION) { inclusive = true }
-                    }
+                onNavigateBack = {
+                    navController.popBackStack()
                 }
             )
         }

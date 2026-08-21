@@ -90,7 +90,6 @@ fun CameraScreen(
     selectedFilter: FilterType,
     onNavigateToReview: (FilterType, String) -> Unit,
     onNavigateToVideoReview: (FilterType, String) -> Unit,
-    onNavigateBack: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: CameraViewModel = viewModel()
 ) {
@@ -105,7 +104,7 @@ fun CameraScreen(
     val recordingElapsedMs by viewModel.recordingElapsedMs.collectAsState()
 
     // Live-selected filter, switchable in-camera via the filter carousel below.
-    // Seeded once from the Gear Selection nav argument, then owned by the ViewModel.
+    // Seeded once from the initial nav argument, then owned by the ViewModel.
     LaunchedEffect(Unit) { viewModel.initializeFilter(selectedFilter) }
     val activeFilter by viewModel.selectedFilter.collectAsState()
 
@@ -236,10 +235,15 @@ fun CameraScreen(
         }
 
         val filterSnapshot = activeFilter
+        val isMaskEnabledSnapshot = isMaskEnabled
+        val previewWSnapshot = previewView.width.toFloat()
+        val previewHSnapshot = previewView.height.toFloat()
+
         viewModel.startRecordingTimer()
         activeRecording = pending.start(ContextCompat.getMainExecutor(context)) { event ->
             if (event is VideoRecordEvent.Finalize) {
                 activeRecording = null
+                val faceTimeline = viewModel.getRecordedFaceTimeline()
                 viewModel.stopRecordingTimer()
                 if (event.hasError()) {
                     Toast.makeText(context, "Recording failed: ${event.cause?.message}", Toast.LENGTH_SHORT).show()
@@ -252,6 +256,10 @@ fun CameraScreen(
                     context = context,
                     rawVideoFile = rawVideoFile,
                     selectedFilter = filterSnapshot,
+                    isMaskEnabled = isMaskEnabledSnapshot,
+                    faceTimeline = faceTimeline,
+                    previewWidth = previewWSnapshot,
+                    previewHeight = previewHSnapshot,
                     outputFile = framedVideoFile
                 ) { composedFile ->
                     isProcessingVideo = false
@@ -500,7 +508,6 @@ fun CameraScreen(
         CameraTopBar(
             filterName = activeFilter.displayName(),
             flashMode = flashMode,
-            onBack = onNavigateBack,
             onCycleFlash = { viewModel.cycleFlashMode() },
             modifier = Modifier.align(Alignment.TopCenter)
         )
