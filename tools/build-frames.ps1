@@ -77,6 +77,7 @@ Add-Type -AssemblyName System.Drawing
 $RepoRoot = Split-Path $PSScriptRoot -Parent
 $FramesRoot = Join-Path $RepoRoot "app\src\main\frames"
 $AssetsRoot = Join-Path $RepoRoot "app\assets"
+$WebAssetsRoot = Join-Path $RepoRoot "web\public\assets"
 
 function Get-ArgbLayer {
     param([string]$Path, [switch]$BinarizeAlpha, [int]$Threshold = 160)
@@ -180,8 +181,13 @@ foreach ($folder in $folders) {
 
     $outputPath = Join-Path $AssetsRoot ($config.outputAsset -replace '/', '\')
     $outputDir = Split-Path $outputPath -Parent
-    if (-not (Test-Path $outputDir)) { New-Item -ItemType Directory -Path $outputDir -Force | Out-Null }
     $layer.Bitmap.Save($outputPath, [System.Drawing.Imaging.ImageFormat]::Png)
+    if (Test-Path $WebAssetsRoot) {
+        $webOutputPath = Join-Path $WebAssetsRoot ($config.outputAsset -replace '/', '\')
+        $webOutputDir = Split-Path $webOutputPath -Parent
+        if (-not (Test-Path $webOutputDir)) { New-Item -ItemType Directory -Path $webOutputDir -Force | Out-Null }
+        $layer.Bitmap.Save($webOutputPath, [System.Drawing.Imaging.ImageFormat]::Png)
+    }
 
     $layer.Bitmap.Dispose()
     "Built '$($config.displayName)' -> $previewPath and $outputPath"
