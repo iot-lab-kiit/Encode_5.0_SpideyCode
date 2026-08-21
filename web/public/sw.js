@@ -1,4 +1,4 @@
-﻿const CACHE_NAME = 'spideycode-pwa-v1';
+const CACHE_NAME = 'spideycode-pwa-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/manifest.webmanifest',
@@ -17,12 +17,17 @@ const ASSETS_TO_CACHE = [
   '/assets/images/spider_verse_bg.jpg',
   '/assets/animations/spider_walk.json',
   '/assets/branding.json',
+  '/mediapipe/face_landmarker.task',
+  '/mediapipe/wasm/vision_wasm_internal.js',
+  '/mediapipe/wasm/vision_wasm_internal.wasm',
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
+      return cache.addAll(ASSETS_TO_CACHE).catch((err) => {
+        console.warn('Non-blocking cache add error during install:', err);
+      });
     })
   );
   self.skipWaiting();
@@ -48,8 +53,8 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  // Cache-first strategy for static assets
-  if (url.pathname.startsWith('/assets/')) {
+  // Cache-first strategy for static assets and offline MediaPipe models
+  if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/mediapipe/')) {
     event.respondWith(
       caches.match(event.request).then((cachedResponse) => {
         if (cachedResponse) return cachedResponse;
@@ -67,7 +72,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network-first for pages and other requests
+  // Network-first for pages and other requests with offline fallback
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {

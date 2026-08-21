@@ -167,12 +167,23 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
     return () => window.removeEventListener('resize', updateSize);
   }, []);
 
-  // Initialize MediaPipe & Camera on mount
+  // Initialize MediaPipe & Camera on mount and handle tab visibility changes
   useEffect(() => {
     mediaPipeManager.initialize();
     startCamera();
 
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopCameraStream();
+      } else {
+        startCamera();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       stopCameraStream();
       if (animFrameIdRef.current) {
         cancelAnimationFrame(animFrameIdRef.current);
@@ -180,20 +191,23 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
     };
   }, [startCamera, stopCameraStream]);
 
-  // Real-time Face Tracking Loop
+  // Real-time Face Tracking Loop (paused when mask is disabled to save CPU/battery)
   useEffect(() => {
     let active = true;
 
     const loop = () => {
       if (!active) return;
-      if (videoRef.current && videoRef.current.readyState >= 2) {
+      if (isMaskEnabled && videoRef.current && videoRef.current.readyState >= 2) {
         const faces = mediaPipeManager.detectFaces(
           videoRef.current,
           viewportSize.width,
           viewportSize.height,
-          isFrontCamera
+          isFrontCamera,
+          isMaskEnabled
         );
         setDetectedFaces(faces);
+      } else if (!isMaskEnabled && detectedFaces.length > 0) {
+        setDetectedFaces([]);
       }
       animFrameIdRef.current = requestAnimationFrame(loop);
     };
@@ -206,7 +220,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         cancelAnimationFrame(animFrameIdRef.current);
       }
     };
-  }, [viewportSize, isFrontCamera]);
+  }, [viewportSize, isFrontCamera, isMaskEnabled, detectedFaces.length]);
 
   // Trigger Shutter / Photo Capture
   const handleCapturePhoto = async () => {

@@ -1,4 +1,4 @@
-﻿import { FilterType, TransformedFaceData, NormalizedRect } from '../types';
+import { FilterType, TransformedFaceData, NormalizedRect } from '../types';
 import {
   FRAME_DEFINITIONS,
   DEFAULT_BRANDING_CONFIG,
@@ -176,7 +176,11 @@ export async function createComposedPoster(
     });
   }
 
-  return canvas.toDataURL('image/jpeg', 0.96);
+  const resultDataUrl = canvas.toDataURL('image/jpeg', 0.96);
+  // Free GPU memory buffer immediately to prevent memory ballooning on iOS Safari
+  canvas.width = 1;
+  canvas.height = 1;
+  return resultDataUrl;
 }
 
 interface WindowBounds {

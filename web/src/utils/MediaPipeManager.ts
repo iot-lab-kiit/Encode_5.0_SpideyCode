@@ -1,4 +1,4 @@
-﻿import { FilesetResolver, FaceLandmarker } from '@mediapipe/tasks-vision';
+import { FilesetResolver, FaceLandmarker } from '@mediapipe/tasks-vision';
 import { TransformedFaceData } from '../types';
 
 export const SPIDEY_MASK_REFERENCE = {
@@ -26,12 +26,36 @@ class MediaPipeManager {
   private smoothedFaces: SmoothedFace[] = [];
   private readonly SMOOTHING_FACTOR = 0.35;
   private readonly STALE_FACE_TIMEOUT_MS = 250;
+  private lastDetectTimestamp = 0;
 
   async initialize(): Promise<boolean> {
     if (this.landmarker) return true;
     if (this.isInitializing) return false;
 
     this.isInitializing = true;
+
+    // Strategy 1: Load from local zero-network assets first
+    try {
+      const vision = await FilesetResolver.forVisionTasks('/mediapipe/wasm');
+      this.landmarker = await FaceLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: '/mediapipe/face_landmarker.task',
+          delegate: 'GPU',
+        },
+        runningMode: 'VIDEO',
+        numFaces: 3,
+        minFaceDetectionConfidence: 0.5,
+        minFacePresenceConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
+
+      this.isInitializing = false;
+      return true;
+    } catch (localErr) {
+      console.warn('Local MediaPipe asset load failed, attempting fallback to CDN:', localErr);
+    }
+
+    // Strategy 2: CDN fallback
     try {
       const vision = await FilesetResolver.forVisionTasks(
         'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
@@ -52,8 +76,8 @@ class MediaPipeManager {
 
       this.isInitializing = false;
       return true;
-    } catch (err) {
-      console.warn('GPU delegate failed or network error, falling back to CPU delegate:', err);
+    } catch (cdnErr) {
+      // Strategy 3: CPU delegate fallback
       try {
         const vision = await FilesetResolver.forVisionTasks(
           'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
@@ -70,7 +94,7 @@ class MediaPipeManager {
         this.isInitializing = false;
         return true;
       } catch (fallbackErr) {
-        console.error('Failed to initialize FaceLandmarker:', fallbackErr);
+        console.error('All FaceLandmarker initialization strategies failed:', fallbackErr);
         this.isInitializing = false;
         return false;
       }
@@ -81,14 +105,33 @@ class MediaPipeManager {
     video: HTMLVideoElement,
     previewWidth: number,
     previewHeight: number,
-    isFrontCamera: boolean = true
+    isFrontCamera: boolean = true,
+    isMaskEnabled: boolean = true
   ): TransformedFaceData[] {
-    if (!this.landmarker || video.readyState < 2 || previewWidth <= 0 || previewHeight <= 0) {
+    if (!this.landmarker || !isMaskEnabled || video.readyState < 2 || previewWidth <= 0 || previewHeight <= 0) {
       return [];
     }
 
     const timestamp = performance.now();
-    const results = this.landmarker.detectForVideo(video, timestamp);
+    // Throttle to avoid duplicate timestamps on same video frame
+    if (timestamp <= this.lastDetectTimestamp) {
+      return this.smoothedFaces.map((f) => ({
+        boundingBox: f.box,
+        leftEye: f.leftEye,
+        rightEye: f.rightEye,
+        eyeAngleDeg: f.angle,
+      }));
+    }
+    this.lastDetectTimestamp = timestamp;
+
+    let results: any = null;
+    try {
+      results = this.landmarker.detectForVideo(video, timestamp);
+    } catch (e) {
+      console.warn('FaceLandmarker detect exception:', e);
+      return [];
+    }
+
     const now = Date.now();
 
     if (!results || !results.faceLandmarks || results.faceLandmarks.length === 0) {
@@ -116,7 +159,9 @@ class MediaPipeManager {
 
     const currentFrameFaces: TransformedFaceData[] = [];
 
-    results.faceLandmarks.forEach((landmarks, idx) => {
+    results.faceLandmarks.forEach((landmarks: any[], idx: number) => {
+      if (!landmarks || landmarks.length < 363) return;
+
       // Landmark 33 (left outer), 133 (left inner) -> midpoint
       const rawLeftEyeX = (landmarks[33].x + landmarks[133].x) / 2;
       const rawLeftEyeY = (landmarks[33].y + landmarks[133].y) / 2;
@@ -211,6 +256,18 @@ class MediaPipeManager {
     });
 
     return currentFrameFaces;
+  }
+
+  cleanup(): void {
+    if (this.landmarker) {
+      try {
+        this.landmarker.close();
+      } catch (e) {
+        console.warn('Error closing FaceLandmarker:', e);
+      }
+      this.landmarker = null;
+    }
+    this.smoothedFaces = [];
   }
 }
 
