@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Image from 'next/image';
@@ -17,6 +17,8 @@ import {
   ZapOff,
   Smile,
   AlertTriangle,
+  Camera,
+  Lock,
 } from 'lucide-react';
 
 interface CameraScreenProps {
@@ -38,6 +40,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
   const [flashMode, setFlashMode] = useState<FlashMode>('OFF');
   const [isCapturing, setIsCapturing] = useState<boolean>(false);
   const [permissionError, setPermissionError] = useState<string | null>(null);
+  const [isInsecureContext, setIsInsecureContext] = useState<boolean>(false);
 
   // Video Recording State
   const [isRecording, setIsRecording] = useState<boolean>(false);
@@ -69,40 +72,87 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
     }
   }, []);
 
-  // Initialize camera stream
+  // Bulletproof tiered camera permission acquisition
   const startCamera = useCallback(async () => {
     stopCameraStream();
     setPermissionError(null);
 
+    // 1. Check if mediaDevices is supported
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const isHttp = typeof window !== 'undefined' && window.location.protocol === 'http:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      if (isHttp) {
+        setIsInsecureContext(true);
+        setPermissionError('Camera access requires HTTPS or localhost. If you are accessing this from a phone over Wi-Fi, please use HTTPS (or run next dev --experimental-https).');
+      } else {
+        setPermissionError('Camera API is not supported in this browser environment.');
+      }
+      return;
+    }
+
     const facingMode = isFrontCamera ? 'user' : 'environment';
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+
+    // Tiered constraint fallbacks (ideal -> relaxed -> generic)
+    const constraintTiers: MediaStreamConstraints[] = [
+      {
         video: {
           facingMode: { ideal: facingMode },
-          width: { ideal: 1920, min: 640 },
-          height: { ideal: 1080, min: 480 },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
         },
-        audio: true,
-      });
+        audio: false,
+      },
+      {
+        video: {
+          facingMode: { ideal: facingMode },
+        },
+        audio: false,
+      },
+      {
+        video: true,
+        audio: false,
+      },
+    ];
 
+    let stream: MediaStream | null = null;
+    let lastError: any = null;
+
+    for (const constraints of constraintTiers) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        if (stream) break;
+      } catch (err: any) {
+        lastError = err;
+        console.warn('Constraint tier failed, attempting fallback tier:', constraints, err);
+      }
+    }
+
+    if (stream) {
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch((e) => console.warn('Video play error:', e));
+        try {
+          await videoRef.current.play();
+        } catch (playErr) {
+          console.warn('Video play auto-resume:', playErr);
+        }
       }
-    } catch (err: any) {
-      console.error('Camera stream error:', err);
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+    } else {
+      console.error('All camera constraint tiers failed:', lastError);
+      if (lastError?.name === 'NotAllowedError' || lastError?.name === 'PermissionDeniedError') {
         setPermissionError(
-          'Camera access was denied. Please allow camera permissions in your browser or iOS Safari settings.'
+          'Camera permission was blocked. Please tap the lock icon in your browser address bar and enable camera permissions.'
         );
+      } else if (lastError?.name === 'NotFoundError' || lastError?.name === 'DevicesNotFoundError') {
+        setPermissionError('No camera device was found on this hardware.');
       } else {
-        setPermissionError('Could not start camera. Please check your camera device.');
+        setPermissionError(
+          lastError?.message || 'Could not access camera. Please ensure permissions are granted.'
+        );
       }
     }
   }, [isFrontCamera, stopCameraStream]);
 
-  // Handle Resize
+  // Handle Viewport Resize
   useEffect(() => {
     const updateSize = () => {
       if (viewportRef.current) {
@@ -117,7 +167,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
     return () => window.removeEventListener('resize', updateSize);
   }, []);
 
-  // Initialize MediaPipe & Camera
+  // Initialize MediaPipe & Camera on mount
   useEffect(() => {
     mediaPipeManager.initialize();
     startCamera();
@@ -163,6 +213,11 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
     if (!videoRef.current || isCapturing) return;
     setIsCapturing(true);
 
+    // Haptic feedback if supported
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate([40]);
+    }
+
     // Screen Flash simulation
     if (flashMode !== 'OFF') {
       setShowScreenFlash(true);
@@ -194,6 +249,10 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
     if (!streamRef.current || isRecording) return;
     const started = videoRecorderRef.current.startRecording(streamRef.current);
     if (!started) return;
+
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate([60]);
+    }
 
     setIsRecording(true);
     setRecordingProgress(0);
@@ -261,23 +320,44 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
         <div className="fixed inset-0 z-50 bg-white pointer-events-none animate-out fade-out duration-200" />
       )}
 
-      {/* Permission Denied Notice */}
+      {/* Permission Denied / Insecure Context Notice */}
       {permissionError && (
-        <div className="absolute inset-0 z-50 bg-[#0E1320] flex flex-col items-center justify-center p-6 text-center">
-          <AlertTriangle className="w-16 h-16 text-[#FFDD00] mb-4" />
-          <h2 className="text-xl font-black uppercase text-white mb-2">Camera Permission Needed</h2>
+        <div className="absolute inset-0 z-50 bg-[#0E1320] flex flex-col items-center justify-center p-6 text-center comic-dots-bg">
+          {isInsecureContext ? (
+            <Lock className="w-16 h-16 text-[#FFDD00] mb-4 animate-bounce" />
+          ) : (
+            <AlertTriangle className="w-16 h-16 text-[#FFDD00] mb-4" />
+          )}
+          <h2 className="text-xl font-black uppercase text-white mb-2">
+            {isInsecureContext ? 'HTTPS Required For Camera' : 'Camera Permission Needed'}
+          </h2>
           <p className="text-sm text-gray-300 max-w-sm mb-6 leading-relaxed">
             {permissionError}
           </p>
-          <BrutalistBox
-            variant="yellow"
-            size="md"
-            isButton
-            onClick={startCamera}
-            className="px-6 py-3"
-          >
-            Retry Camera Access
-          </BrutalistBox>
+
+          <div className="flex flex-col gap-3 w-full max-w-xs">
+            <BrutalistBox
+              variant="yellow"
+              size="md"
+              isButton
+              onClick={startCamera}
+              className="py-3.5 flex items-center justify-center gap-2"
+            >
+              <Camera className="w-4 h-4" />
+              <span>GRANT CAMERA ACCESS</span>
+            </BrutalistBox>
+
+            <BrutalistBox
+              variant="dark"
+              size="sm"
+              isButton
+              onClick={onNavigateBack}
+              className="py-2.5 flex items-center justify-center gap-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>RETURN TO GEAR</span>
+            </BrutalistBox>
+          </div>
         </div>
       )}
 
@@ -340,6 +420,7 @@ export const CameraScreen: React.FC<CameraScreenProps> = ({
           autoPlay
           playsInline
           muted
+          webkit-playsinline="true"
           className={`absolute inset-0 w-full h-full object-cover ${
             isFrontCamera ? 'scale-x-[-1]' : ''
           }`}
