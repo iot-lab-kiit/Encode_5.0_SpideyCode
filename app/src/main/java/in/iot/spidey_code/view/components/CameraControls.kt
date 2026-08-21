@@ -97,10 +97,6 @@ fun CameraControls(
                     )
                 }
 
-                SpideyNetAnimation(
-                    modifier = Modifier.size(110.dp)
-                )
-
                 CameraShutterButton(
                     isCapturing = isCapturing,
                     isRecording = isRecording,
@@ -108,6 +104,10 @@ fun CameraControls(
                     onTapPhoto = onTapPhoto,
                     onStartRecording = onStartRecording,
                     onStopRecording = onStopRecording
+                )
+
+                SpideyNetAnimation(
+                    modifier = Modifier.size(110.dp)
                 )
             }
 

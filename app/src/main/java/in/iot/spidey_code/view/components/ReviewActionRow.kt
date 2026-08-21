@@ -1,6 +1,5 @@
 package `in`.iot.spidey_code.view.components
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -47,27 +46,29 @@ fun ReviewActionRow(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 16.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                    .padding(vertical = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 ReviewActionButton(
                     icon = Icons.Filled.Download,
                     label = "DOWNLOAD",
-                    onClick = onDownload
+                    onClick = onDownload,
+                    modifier = Modifier.weight(1f)
                 )
 
                 ReviewActionButton(
                     icon = Icons.Filled.Share,
                     label = "SHARE",
                     onClick = onShare,
-                    isPrimary = true
+                    isPrimary = true,
+                    modifier = Modifier.weight(1f)
                 )
 
                 ReviewActionButton(
                     icon = Icons.Filled.Refresh,
                     label = "RETAKE",
-                    onClick = onRetake
+                    onClick = onRetake,
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
