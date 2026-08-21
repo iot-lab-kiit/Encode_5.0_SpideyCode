@@ -10,7 +10,7 @@ import `in`.iot.spidey_code.view.navigation.AppNavigation
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        val splashScreen = installSplashScreen()
+        installSplashScreen()
         super.onCreate(savedInstanceState)
 
         window.setBackgroundDrawableResource(android.R.color.black)
