@@ -1,6 +1,5 @@
 package `in`.iot.spidey_code.view.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -15,20 +14,15 @@ import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import `in`.iot.spidey_code.vm.FlashMode
 
 @Composable
 fun CameraTopBar(
-    filterName: String,
     flashMode: FlashMode,
     onCycleFlash: () -> Unit,
     modifier: Modifier = Modifier
@@ -42,21 +36,6 @@ fun CameraTopBar(
             .statusBarsPadding()
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        // Floating Centered Mode Indicator Pill (Truly Centered)
-        Surface(
-            modifier = Modifier.align(Alignment.Center),
-            color = darkTranslucentBg,
-            shape = RoundedCornerShape(20.dp),
-            border = BorderStroke(1.dp, subtleBorderColor)
-        ) {
-            Text(
-                text = filterName,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-        }
 
         // Floating Rounded-Square Flash Toggle Button (Top-Right)
         IconButton(

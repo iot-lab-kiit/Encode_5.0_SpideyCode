@@ -506,7 +506,6 @@ fun CameraScreen(
 
         // TOPMOST Compose Layer: Floating Islands Top Control Bar
         CameraTopBar(
-            filterName = activeFilter.displayName(),
             flashMode = flashMode,
             onCycleFlash = { viewModel.cycleFlashMode() },
             modifier = Modifier.align(Alignment.TopCenter)

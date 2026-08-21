@@ -1,6 +1,5 @@
 package `in`.iot.spidey_code.vm
 
-import android.graphics.Bitmap
 import android.graphics.PointF
 import android.graphics.RectF
 import android.util.Log
@@ -55,9 +54,6 @@ class CameraViewModel : ViewModel() {
 
     private val _detectedFaces = MutableStateFlow<List<TransformedFaceData>>(emptyList())
     val detectedFaces: StateFlow<List<TransformedFaceData>> = _detectedFaces.asStateFlow()
-
-    private val _capturedBitmap = MutableStateFlow<Bitmap?>(null)
-    val capturedBitmap: StateFlow<Bitmap?> = _capturedBitmap.asStateFlow()
 
     private val _isFrontCamera = MutableStateFlow(true)
     val isFrontCamera: StateFlow<Boolean> = _isFrontCamera.asStateFlow()
@@ -155,18 +151,6 @@ class CameraViewModel : ViewModel() {
 
     fun toggleMaskEnabled() {
         _isMaskEnabled.value = !_isMaskEnabled.value
-    }
-
-    fun setMaskEnabled(enabled: Boolean) {
-        _isMaskEnabled.value = enabled
-    }
-
-    fun onImageCaptured(bitmap: Bitmap) {
-        _capturedBitmap.value = bitmap
-    }
-
-    fun clearCapturedImage() {
-        _capturedBitmap.value = null
     }
 
     /**
